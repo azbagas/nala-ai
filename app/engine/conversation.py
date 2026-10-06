@@ -85,12 +85,17 @@ class ConversationEngine:
         prompt_builder: PromptBuilder,
         llm_cfg: LLMSection,
         conv_cfg: ConversationSection,
+        store: Any = None,
     ) -> None:
         self.gemini = gemini
         self.prompt_builder = prompt_builder
         self.llm_cfg = llm_cfg
         self.conv_cfg = conv_cfg
+        self.store = store
         self._history: list[ChatMessage] = []
+
+    def set_store(self, store: Any) -> None:
+        self.store = store
 
     def get_history(self) -> list[ChatMessage]:
         return list(self._history)
@@ -101,19 +106,40 @@ class ConversationEngine:
         self._history.clear()
         log.info("cleared_conversation_history count=%d", count)
 
-    def _build_contents(self, new_user_text: str) -> list[types.Content]:
+    async def _build_contents(self, new_user_text: str) -> list[types.Content]:
         """Convert recent message history plus current user input into Gemini contents."""
         contents: list[types.Content] = []
 
-        # Slice to the configured history window
-        window = self._history[-self.llm_cfg.history_window_messages :]
-        for msg in window:
-            contents.append(
-                types.Content(
-                    role=msg.role,
-                    parts=[types.Part.from_text(text=msg.content)],
+        if self.store:
+            try:
+                db_messages = await self.store.get_recent_messages(limit=self.llm_cfg.history_window_messages)
+                for m in db_messages:
+                    role = "user" if m.role == "user" else "model"
+                    contents.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=m.content)],
+                        )
+                    )
+            except Exception as exc:
+                log.warning("failed_to_fetch_db_messages error=%r -> falling back to memory", exc)
+                window = self._history[-self.llm_cfg.history_window_messages :]
+                for msg in window:
+                    contents.append(
+                        types.Content(
+                            role=msg.role,
+                            parts=[types.Part.from_text(text=msg.content)],
+                        )
+                    )
+        else:
+            window = self._history[-self.llm_cfg.history_window_messages :]
+            for msg in window:
+                contents.append(
+                    types.Content(
+                        role=msg.role,
+                        parts=[types.Part.from_text(text=msg.content)],
+                    )
                 )
-            )
 
         # Append current user turn
         contents.append(
@@ -130,8 +156,16 @@ class ConversationEngine:
         if not clean_user_text:
             return []
 
-        system_instruction = self.prompt_builder.build_system_prompt()
-        contents = self._build_contents(clean_user_text)
+        if self.store:
+            try:
+                system_instruction = await self.prompt_builder.build_system_prompt_from_store(self.store)
+            except Exception as exc:
+                log.warning("failed_to_build_prompt_from_store error=%r -> fallback to basic", exc)
+                system_instruction = self.prompt_builder.build_system_prompt()
+        else:
+            system_instruction = self.prompt_builder.build_system_prompt()
+
+        contents = await self._build_contents(clean_user_text)
 
         # 1. First attempt to generate reply
         try:
@@ -185,8 +219,16 @@ class ConversationEngine:
             bubbles = [FALLBACK_REPLY]
 
         # 4. Save to history (user message and bot's reply)
+        bot_reply_content = "\n---\n".join(bubbles)
         self._history.append(ChatMessage(role="user", content=clean_user_text))
-        self._history.append(ChatMessage(role="model", content="\n---\n".join(bubbles)))
+        self._history.append(ChatMessage(role="model", content=bot_reply_content))
+
+        if self.store:
+            try:
+                await self.store.save_message(role="user", content=clean_user_text, origin="reply")
+                await self.store.save_message(role="bot", content=bot_reply_content, origin="reply")
+            except Exception as exc:
+                log.error("failed_to_save_message_to_store error=%r", exc)
 
         # Enforce max history window
         max_keep = self.llm_cfg.history_window_messages * 2

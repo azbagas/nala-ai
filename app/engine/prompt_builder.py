@@ -99,3 +99,34 @@ class PromptBuilder:
         }
 
         return self._render(template, context)
+
+    async def build_system_prompt_from_store(
+        self,
+        store: Any,
+        *,
+        dt: datetime | None = None,
+        activity: str | None = None,
+        mood: str | None = None,
+        schedule: str | None = None,
+    ) -> str:
+        """Fetch active facts, pending threads, and latest summary from store, then render prompt."""
+        active_facts = await store.get_active_facts()
+        pending_threads = await store.get_pending_threads()
+        latest_summary_rec = await store.get_latest_summary()
+
+        facts_list = [f"[{f.category}] {f.content}" for f in active_facts] if active_facts else None
+        threads_list = [
+            f"{t.topic}" + (f" (target: {t.target_date})" if t.target_date else "")
+            for t in pending_threads
+        ] if pending_threads else None
+        summary_text = latest_summary_rec.content if latest_summary_rec else None
+
+        return self.build_system_prompt(
+            dt=dt,
+            activity=activity,
+            mood=mood,
+            schedule=schedule,
+            facts=facts_list,
+            open_threads=threads_list,
+            latest_summary=summary_text,
+        )

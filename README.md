@@ -9,7 +9,7 @@ See [PRD_AI_Companion_Bot.md](PRD_AI_Companion_Bot.md) for the full spec.
 |---|---|---|
 | **M0** | Repo, Docker skeleton, config loader, connectivity check | ✅ |
 | **M1** | Basic persona chat, bubbles, typing delay, debouncing | ✅ |
-| M2 | SQLite memory, extraction, summaries | ⏳ |
+| **M2** | SQLite memory, extraction, summaries, memory commands | ✅ |
 | M3 | Proactive planner | ⏳ |
 | M4 | Her daily life | ⏳ |
 | M5 | Controls & polish | ⏳ |
@@ -37,6 +37,10 @@ It replies with your numeric ID. Put it in `.env` and restart. After that, every
 | `/start` | Greets the owner warmly in character (or gives your ID on first setup) |
 | `/ping` | Round-trip check to Gemini, shows model, latency, and tokens |
 | `/reload_persona` | Hot-reloads `config/persona.yaml` without restarting the bot |
+| `/memory` | Views remembered facts, pending follow-up threads, and summaries |
+| `/forget <id>` | Deactivates a remembered fact by its numeric ID |
+| `/reset_memory` | Wipes remembered facts, open threads, summaries, and chat history |
+| `/run_nightly` | Runs the memory extraction and daily summary job manually |
 | `/clear` or `/reset` | Clears recent in-memory conversation history |
 
 ## Docker

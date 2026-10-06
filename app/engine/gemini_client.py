@@ -30,9 +30,13 @@ class GeminiError(Exception):
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, cfg: LLMSection) -> None:
+    def __init__(self, api_key: str, cfg: LLMSection, store: Any = None) -> None:
         self._client = genai.Client(api_key=api_key)
         self._cfg = cfg
+        self._store = store
+
+    def set_store(self, store: Any) -> None:
+        self._store = store
 
     async def generate(
         self,
@@ -79,6 +83,18 @@ class GeminiClient:
                     purpose, model, attempt, latency_ms,
                     result.input_tokens, result.output_tokens, not text,
                 )
+                if self._store:
+                    try:
+                        await self._store.log_llm_call(
+                            purpose=purpose,
+                            model=model,
+                            input_tokens=result.input_tokens,
+                            output_tokens=result.output_tokens,
+                            latency_ms=latency_ms,
+                            success=bool(text),
+                        )
+                    except Exception as log_err:
+                        log.debug("failed_to_log_llm_call error=%r", log_err)
                 if not text:
                     raise GeminiError("empty response (possibly blocked by safety filters)")
                 return result
@@ -90,5 +106,18 @@ class GeminiClient:
                 )
                 if attempt < attempts:
                     await asyncio.sleep(min(2 ** attempt, 20) + random.uniform(0, 0.5))
+
+        if self._store:
+            try:
+                await self._store.log_llm_call(
+                    purpose=purpose,
+                    model=model,
+                    input_tokens=None,
+                    output_tokens=None,
+                    latency_ms=0,
+                    success=False,
+                )
+            except Exception as log_err:
+                log.debug("failed_to_log_llm_call error=%r", log_err)
 
         raise GeminiError(f"Gemini call failed after {attempts} attempts: {last_exc!r}") from last_exc

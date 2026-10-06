@@ -139,3 +139,45 @@ async def test_conversation_engine_clear_history(test_engine):
 
     engine.clear_history()
     assert len(engine.get_history()) == 0
+
+
+@pytest.mark.asyncio
+async def test_conversation_engine_with_memory_store(tmp_path):
+    from app.memory.store import MemoryStore
+
+    store = MemoryStore(tmp_path / "conv_test.db")
+    await store.init_db()
+    await store.add_fact("work", "Software Engineer di Bandung")
+
+    persona = Persona(name="Nara")
+    builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
+    mock_gemini = AsyncMock()
+    mock_gemini.generate.return_value = GeminiResult(
+        text="Halo! Aku dengar kamu kerja di Bandung ya?",
+        model="gemini-test",
+        input_tokens=100,
+        output_tokens=25,
+        latency_ms=150,
+    )
+
+    engine = ConversationEngine(
+        gemini=mock_gemini,
+        prompt_builder=builder,
+        llm_cfg=LLMSection(chat_model="test", utility_model="test-lite", history_window_messages=5),
+        conv_cfg=ConversationSection(),
+        store=store,
+    )
+
+    bubbles = await engine.reply("Halo!")
+    assert len(bubbles) >= 1
+
+    # Verify messages saved to database
+    db_messages = await store.get_recent_messages()
+    assert len(db_messages) == 2
+    assert db_messages[0].role == "user"
+    assert db_messages[0].content == "Halo!"
+    assert db_messages[1].role == "bot"
+
+    # Verify that the system prompt passed to Gemini included the fact
+    call_args = mock_gemini.generate.call_args
+    assert "Software Engineer di Bandung" in call_args.kwargs["system_instruction"]
