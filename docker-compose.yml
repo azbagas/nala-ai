@@ -1,0 +1,15 @@
+services:
+  companion:
+    build: .
+    container_name: companion-bot
+    restart: unless-stopped        # NFR-1: auto-restart on crash
+    env_file: .env
+    environment:
+      TZ: Asia/Jakarta
+    volumes:
+      - ./data:/app/data           # SQLite DB, logs, backups (persisted)
+      - ./config:/app/config:ro    # edit persona.yaml without rebuilding
+      - ./prompts:/app/prompts:ro
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

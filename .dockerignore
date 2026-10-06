@@ -1,0 +1,10 @@
+.env
+.git
+.venv
+venv
+data
+tests
+__pycache__
+*.pyc
+.pytest_cache
+PRD_AI_Companion_Bot.md

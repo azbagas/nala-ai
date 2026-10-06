@@ -1,0 +1,65 @@
+# Main runtime configuration (PRD §18.1).
+# ${VAR} / ${VAR:-default} are expanded from environment variables / .env.
+
+app:
+  timezone: Asia/Jakarta
+  language: id
+  owner_telegram_id: ${OWNER_ID:-}
+  log_level: ${LOG_LEVEL:-INFO}
+
+llm:
+  provider: gemini
+  # Verify availability with: python -m app.main --check
+  # chat_model: "gemini-3.8-flash"           # stronger model for conversation
+  chat_model: "gemini-3.5-flash-lite"
+  utility_model: "gemini-3.5-flash-lite"   # cheap/fast model for extraction, summaries, life
+  temperature_chat: 0.9
+  temperature_utility: 0.2
+  max_output_tokens_chat: 300
+  history_window_messages: 24
+  request_timeout_seconds: 30
+  max_retries: 3
+
+conversation:
+  debounce_seconds: 4
+  max_bubbles: 3
+  max_bubble_chars: 280
+  typing_delay:
+    min_seconds: 1.0
+    max_seconds: 6.0
+    chars_per_second: 25
+
+proactive:
+  daily_cap: 4
+  quiet_hours: { start: "22:00", end: "06:00" }
+  windows:
+    - { name: morning,   start: "06:00", end: "08:00", chance: 0.80 }
+    - { name: midday,    start: "12:00", end: "14:00", chance: 0.70 }
+    - { name: afternoon, start: "15:30", end: "17:30", chance: 0.40 }
+    - { name: evening,   start: "19:00", end: "21:00", chance: 0.60 }
+  bonus: { chance: 0.25, max_per_day: 1, awake_start: "09:00", awake_end: "21:30" }
+  skip_if_user_active_within_minutes: 20
+  backoff_after_ignored: 2
+  stop_after_ignored: 4
+  message_type_weights:
+    checkin: 3
+    followup: 4
+    activity: 3
+    joke: 2
+    thought: 2
+    question: 2
+
+memory:
+  nightly_job_time: "23:30"
+  daily_life_job_time: "05:30"
+  thread_expire_days: 7
+  rolling_summary_every_days: 7
+
+storage:
+  db_path: companion.db        # relative to DATA_DIR
+  backup_dir: backups          # relative to DATA_DIR
+  log_dir: logs                # relative to DATA_DIR
+
+backup:
+  daily_time: "03:00"
+  keep_days: 14
