@@ -6,6 +6,7 @@ daily life, proactive plans, state, and LLM call observability.
 
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -168,6 +169,26 @@ class PlanRecord:
     status: str
     skip_reason: str | None
     message_id: int | None
+
+
+@dataclass(frozen=True)
+class ScheduleBlock:
+    from_time: str
+    to_time: str
+    activity: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"from": self.from_time, "to": self.to_time, "activity": self.activity}
+
+
+@dataclass(frozen=True)
+class DailyLifeRecord:
+    date: str
+    schedule: list[ScheduleBlock]
+    mood: str
+    energy: str
+    notes: str | None
+    created_at: str
 
 
 class MemoryStore:
@@ -717,4 +738,107 @@ class MemoryStore:
 
     async def set_owner_chat_id(self, chat_id: int) -> None:
         await self.set_state("owner_chat_id", str(chat_id))
+
+    # -----------------------------------------------------------------------
+    # Daily Life (FR-5.1, FR-5.2)
+    # -----------------------------------------------------------------------
+
+    async def save_daily_life(
+        self,
+        date: str,
+        schedule: list[dict[str, str]] | list[ScheduleBlock],
+        mood: str,
+        energy: str,
+        notes: str | None = None,
+    ) -> None:
+        ts = to_utc_iso(now_utc())
+        normalized: list[dict[str, str]] = []
+        for item in schedule:
+            if isinstance(item, ScheduleBlock):
+                normalized.append(item.to_dict())
+            elif isinstance(item, dict):
+                normalized.append({
+                    "from": item.get("from", item.get("from_time", "")),
+                    "to": item.get("to", item.get("to_time", "")),
+                    "activity": item.get("activity", ""),
+                })
+        sched_json = json.dumps(normalized, ensure_ascii=False)
+
+        async with self._connection() as db:
+            await db.execute(
+                "INSERT INTO daily_life (date, schedule_json, mood, energy, notes, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(date) DO UPDATE SET "
+                "schedule_json = excluded.schedule_json, "
+                "mood = excluded.mood, "
+                "energy = excluded.energy, "
+                "notes = excluded.notes",
+                (date, sched_json, mood.strip(), energy.strip(), notes.strip() if notes else None, ts),
+            )
+            await db.commit()
+
+    async def get_daily_life(self, date: str) -> DailyLifeRecord | None:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT date, schedule_json, mood, energy, notes, created_at "
+                "FROM daily_life WHERE date = ?",
+                (date,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            try:
+                raw_sched = json.loads(row["schedule_json"])
+                blocks = [
+                    ScheduleBlock(
+                        from_time=b.get("from", b.get("from_time", "")),
+                        to_time=b.get("to", b.get("to_time", "")),
+                        activity=b.get("activity", ""),
+                    )
+                    for b in raw_sched
+                ]
+            except Exception:
+                blocks = []
+            return DailyLifeRecord(
+                date=row["date"],
+                schedule=blocks,
+                mood=row["mood"] or "santai",
+                energy=row["energy"] or "medium",
+                notes=row["notes"],
+                created_at=row["created_at"],
+            )
+
+    async def get_recent_daily_life(self, limit: int = 3) -> list[DailyLifeRecord]:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT date, schedule_json, mood, energy, notes, created_at "
+                "FROM daily_life ORDER BY date DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+            results: list[DailyLifeRecord] = []
+            for row in rows:
+                try:
+                    raw_sched = json.loads(row["schedule_json"])
+                    blocks = [
+                        ScheduleBlock(
+                            from_time=b.get("from", b.get("from_time", "")),
+                            to_time=b.get("to", b.get("to_time", "")),
+                            activity=b.get("activity", ""),
+                        )
+                        for b in raw_sched
+                    ]
+                except Exception:
+                    blocks = []
+                results.append(
+                    DailyLifeRecord(
+                        date=row["date"],
+                        schedule=blocks,
+                        mood=row["mood"] or "santai",
+                        energy=row["energy"] or "medium",
+                        notes=row["notes"],
+                        created_at=row["created_at"],
+                    )
+                )
+            return results
 

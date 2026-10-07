@@ -190,3 +190,56 @@ async def test_proactive_plans_and_state(temp_store: MemoryStore):
     await temp_store.set_owner_chat_id(123456)
     assert await temp_store.get_owner_chat_id() == 123456
 
+
+@pytest.mark.asyncio
+async def test_daily_life_storage(temp_store: MemoryStore):
+    schedule = [
+        {"from": "07:00", "to": "08:00", "activity": "Sarapan & bikin kopi"},
+        {"from": "09:00", "to": "12:00", "activity": "Kerja desain freelance"},
+        {"from": "12:00", "to": "13:00", "activity": "Makan siang & istirahat"},
+    ]
+
+    await temp_store.save_daily_life(
+        date="2026-10-07",
+        schedule=schedule,
+        mood="semangat dan ceria",
+        energy="high",
+        notes="Mochi numpahin air tapi lucu",
+    )
+
+    rec = await temp_store.get_daily_life("2026-10-07")
+    assert rec is not None
+    assert rec.date == "2026-10-07"
+    assert rec.mood == "semangat dan ceria"
+    assert rec.energy == "high"
+    assert rec.notes == "Mochi numpahin air tapi lucu"
+    assert len(rec.schedule) == 3
+    assert rec.schedule[0].from_time == "07:00"
+    assert rec.schedule[0].activity == "Sarapan & bikin kopi"
+
+    # Upsert on conflict
+    await temp_store.save_daily_life(
+        date="2026-10-07",
+        schedule=schedule,
+        mood="agak ngantuk",
+        energy="low",
+        notes="Mau tidur siang",
+    )
+    updated_rec = await temp_store.get_daily_life("2026-10-07")
+    assert updated_rec is not None
+    assert updated_rec.mood == "agak ngantuk"
+    assert updated_rec.energy == "low"
+
+    # Recent daily life
+    await temp_store.save_daily_life(
+        date="2026-10-06",
+        schedule=schedule[:1],
+        mood="santai",
+        energy="medium",
+    )
+    recents = await temp_store.get_recent_daily_life(limit=5)
+    assert len(recents) == 2
+    assert recents[0].date == "2026-10-07"
+    assert recents[1].date == "2026-10-06"
+
+

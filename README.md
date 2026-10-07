@@ -11,7 +11,7 @@ See [PRD_AI_Companion_Bot.md](PRD_AI_Companion_Bot.md) for the full spec.
 | **M1** | Basic persona chat, bubbles, typing delay, debouncing | ✅ |
 | **M2** | SQLite memory, extraction, summaries, memory commands | ✅ |
 | **M3** | Proactive planner with windows, persistence, pre-send checks, quiet hours | ✅ |
-| M4 | Her daily life | ⏳ |
+| **M4** | Her daily life (schedule generation, mood/energy, activity matching) | ✅ |
 | M5 | Controls & polish | ⏳ |
 | M6 | Deploy & harden | ⏳ |
 
@@ -46,6 +46,7 @@ It replies with your numeric ID. Put it in `.env` and restart. After that, every
 | `/pause [duration]` | Pauses proactive messages (e.g., `/pause 3h`, `/pause today`, `/pause 30m`) |
 | `/resume` | Resumes proactive messages |
 | `/test_proactive` | Manually triggers a proactive message immediately for testing |
+| `/life [reroll]` | Views her current activity, mood, energy, and full schedule (or rerolls it) |
 
 ## Docker
 

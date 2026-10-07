@@ -67,6 +67,10 @@ def _summarizer(ctx: ContextTypes.DEFAULT_TYPE) -> ConversationSummarizer:
     return ctx.application.bot_data["summarizer"]
 
 
+def _life_simulator(ctx: ContextTypes.DEFAULT_TYPE) -> Any:
+    return ctx.application.bot_data.get("life_simulator")
+
+
 def _is_owner(update: Update, settings: Settings) -> bool:
     owner_id = settings.config.app.owner_telegram_id
     user = update.effective_user
@@ -138,6 +142,8 @@ async def reload_persona(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         _prompt_builder(ctx).set_persona(persona)
         if "summarizer" in ctx.application.bot_data:
             _summarizer(ctx).set_persona(persona)
+        if "life_simulator" in ctx.application.bot_data and _life_simulator(ctx):
+            _life_simulator(ctx).set_persona(persona)
     except ConfigError as exc:
         log.error("persona_reload_failed error=%s", exc)
         await update.effective_message.reply_text("Gagal reload persona, file-nya ada yang salah. Cek log ya.")
@@ -439,6 +445,50 @@ async def test_proactive_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         )
 
 
+async def life_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """View or regenerate her simulated daily schedule (FR-5.1, FR-5.2)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    simulator = _life_simulator(ctx)
+    now_dt = now_local(settings.tz)
+    today_str = now_dt.strftime("%Y-%m-%d")
+
+    force = False
+    if ctx.args and ctx.args[0].lower() in ("generate", "reroll", "buat", "reset"):
+        force = True
+        await update.effective_message.reply_text("☕ Merancang ulang jadwal hari ini...")
+
+    if simulator:
+        rec = await simulator.generate_daily_life(target_date=now_dt.date(), force=force)
+    else:
+        rec = await _store(ctx).get_daily_life(today_str)
+
+    if not rec:
+        await update.effective_message.reply_text("Jadwal hari ini belum dibuat. Coba `/life generate`.")
+        return
+
+    from app.life.simulator import resolve_current_activity
+
+    curr_act = resolve_current_activity(rec.schedule, now_dt)
+
+    lines = [
+        f"🌸 <b>Jadwal & Kehidupan {settings.persona.name} Hari Ini</b>",
+        f"📅 <code>{today_str}</code> | Jam sekarang: <code>{now_dt:%H:%M} WIB</code>\n",
+        f"📍 <b>Sedang apa sekarang:</b>\n<i>{curr_act}</i>\n",
+        f"✨ <b>Suasana hati:</b> {rec.mood} (energi: {rec.energy})",
+    ]
+    if rec.notes:
+        lines.append(f"📝 <b>Catatan hari ini:</b> <i>{rec.notes}</i>")
+
+    lines.append("\n🗓️ <b>Rencana kegiatan hari ini:</b>")
+    for b in rec.schedule:
+        lines.append(f"• <code>{b.from_time} - {b.to_time}</code>: {b.activity}")
+
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
 async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     log.exception("handler_error", exc_info=ctx.error)
 
@@ -485,5 +535,6 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("pause", pause_command))
     app.add_handler(CommandHandler("resume", resume_command))
     app.add_handler(CommandHandler(["test_proactive", "trigger_proactive"], test_proactive_command))
+    app.add_handler(CommandHandler(["life", "jadwal"], life_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))
     app.add_error_handler(on_error)

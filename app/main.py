@@ -23,6 +23,7 @@ from app.engine.gemini_client import GeminiClient, GeminiError
 from app.engine.prompt_builder import PromptBuilder
 from app.gateway.debouncer import MessageDebouncer
 from app.gateway.handlers import create_on_flush_callback, register_handlers
+from app.life.simulator import LifeSimulator
 from app.memory.extractor import MemoryExtractor
 from app.memory.store import MemoryStore
 from app.memory.summarizer import ConversationSummarizer
@@ -127,6 +128,15 @@ async def run_checks(settings: Settings) -> bool:
         ok = False
         print(f"Planner FAIL {exc!r}")
 
+    # 6. Test Life Simulator
+    try:
+        life_sim = LifeSimulator(gemini, store, settings.persona, settings.prompts_dir, cfg.llm, settings.tz)
+        today_life = await life_sim.get_or_generate_today()
+        print(f"Life OK     mood={today_life.mood!r} blocks={len(today_life.schedule)}")
+    except Exception as exc:
+        ok = False
+        print(f"Life FAIL   {exc!r}")
+
     return ok
 
 
@@ -198,16 +208,34 @@ async def schedule_day_proactive_jobs(app: Application) -> None:
         log.exception("failed_to_schedule_proactive_jobs error=%r", exc)
 
 
+async def run_morning_life_job(simulator: LifeSimulator) -> None:
+    """Generate her daily life schedule and mood in the morning (PRD §8.5)."""
+    log.info("morning_life_job_started")
+    try:
+        rec = await simulator.generate_daily_life()
+        log.info("morning_life_job_completed date=%s mood=%s energy=%s", rec.date, rec.mood, rec.energy)
+    except Exception as exc:
+        log.exception("morning_life_job_failed error=%r", exc)
+
+
 async def _post_init(app: Application) -> None:
     me = await app.bot.get_me()
     settings: Settings = app.bot_data["settings"]
     store: MemoryStore = app.bot_data["store"]
     await store.init_db()
 
+    # Ensure today's simulated life is ready (PRD §8.5)
+    life_simulator: LifeSimulator | None = app.bot_data.get("life_simulator")
+    if life_simulator:
+        try:
+            await life_simulator.get_or_generate_today()
+        except Exception as exc:
+            log.warning("startup_life_generation_failed error=%r", exc)
+
     # Plan proactive sends and schedule future jobs for today
     await schedule_day_proactive_jobs(app)
 
-    # Start APScheduler for nightly and proactive jobs
+    # Start APScheduler for nightly, proactive, and morning life jobs
     scheduler: AsyncIOScheduler = app.bot_data["scheduler"]
     scheduler.start()
 
@@ -249,6 +277,14 @@ def run_bot(settings: Settings) -> None:
         llm_cfg=settings.config.llm,
         tz=settings.tz,
     )
+    life_simulator = LifeSimulator(
+        gemini=gemini,
+        store=store,
+        persona=settings.persona,
+        prompts_dir=settings.prompts_dir,
+        llm_cfg=settings.config.llm,
+        tz=settings.tz,
+    )
 
     on_flush = create_on_flush_callback(app)
     debouncer = MessageDebouncer(
@@ -256,7 +292,7 @@ def run_bot(settings: Settings) -> None:
         on_flush=on_flush,
     )
 
-    # APScheduler for nightly jobs and proactive daily planner
+    # APScheduler for nightly jobs, proactive planner, and morning life generation
     scheduler = AsyncIOScheduler(timezone=settings.config.app.timezone)
     hh, mm = settings.config.memory.nightly_job_time.split(":")
     scheduler.add_job(
@@ -273,6 +309,18 @@ def run_bot(settings: Settings) -> None:
             settings.config.memory.rolling_summary_every_days,
         ],
         id="nightly_memory_job",
+        replace_existing=True,
+    )
+
+    # Morning life generation runs at 05:30 WIB every day (PRD §8.5)
+    life_hh, life_mm = settings.config.memory.daily_life_job_time.split(":")
+    scheduler.add_job(
+        run_morning_life_job,
+        trigger="cron",
+        hour=int(life_hh),
+        minute=int(life_mm),
+        args=[life_simulator],
+        id="morning_life_job",
         replace_existing=True,
     )
 
@@ -294,6 +342,7 @@ def run_bot(settings: Settings) -> None:
     app.bot_data["engine"] = engine
     app.bot_data["extractor"] = extractor
     app.bot_data["summarizer"] = summarizer
+    app.bot_data["life_simulator"] = life_simulator
     app.bot_data["debouncer"] = debouncer
     app.bot_data["scheduler"] = scheduler
 

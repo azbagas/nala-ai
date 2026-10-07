@@ -109,7 +109,7 @@ class PromptBuilder:
         mood: str | None = None,
         schedule: str | None = None,
     ) -> str:
-        """Fetch active facts, pending threads, and latest summary from store, then render prompt."""
+        """Fetch active facts, pending threads, latest summary, and today's daily life from store, then render prompt."""
         active_facts = await store.get_active_facts()
         pending_threads = await store.get_pending_threads()
         latest_summary_rec = await store.get_latest_summary()
@@ -121,8 +121,31 @@ class PromptBuilder:
         ] if pending_threads else None
         summary_text = latest_summary_rec.content if latest_summary_rec else None
 
+        now_dt = dt or now_local(self.tz)
+        today_str = now_dt.strftime("%Y-%m-%d")
+
+        # Automatically resolve simulated daily life if not explicitly overridden
+        if (activity is None or mood is None or schedule is None) and hasattr(store, "get_daily_life"):
+            try:
+                daily_rec = await store.get_daily_life(today_str)
+                if daily_rec:
+                    from app.life.simulator import format_schedule_summary, resolve_current_activity
+
+                    if activity is None:
+                        act = resolve_current_activity(daily_rec.schedule, now_dt)
+                        if daily_rec.notes:
+                            activity = f"{act} (catatan hari ini: {daily_rec.notes})"
+                        else:
+                            activity = act
+                    if mood is None:
+                        mood = f"{daily_rec.mood} (tingkat energi: {daily_rec.energy})"
+                    if schedule is None:
+                        schedule = format_schedule_summary(daily_rec.schedule)
+            except Exception as exc:
+                log.warning("failed_to_resolve_daily_life_in_prompt error=%r", exc)
+
         return self.build_system_prompt(
-            dt=dt,
+            dt=now_dt,
             activity=activity,
             mood=mood,
             schedule=schedule,
