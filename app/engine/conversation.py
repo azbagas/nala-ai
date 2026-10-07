@@ -227,6 +227,10 @@ class ConversationEngine:
             try:
                 await self.store.save_message(role="user", content=clean_user_text, origin="reply")
                 await self.store.save_message(role="bot", content=bot_reply_content, origin="reply")
+                if hasattr(self.store, "update_last_user_message_time"):
+                    await self.store.update_last_user_message_time()
+                if hasattr(self.store, "reset_ignored_count"):
+                    await self.store.reset_ignored_count()
             except Exception as exc:
                 log.error("failed_to_save_message_to_store error=%r", exc)
 

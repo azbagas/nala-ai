@@ -15,7 +15,7 @@ from typing import AsyncGenerator
 
 import aiosqlite
 
-from app.utils.time import now_utc, to_utc_iso
+from app.utils.time import from_utc_iso, now_utc, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +157,17 @@ class SummaryRecord:
     period_end: str
     content: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class PlanRecord:
+    id: int
+    date: str
+    window_name: str
+    planned_at: str
+    status: str
+    skip_reason: str | None
+    message_id: int | None
 
 
 class MemoryStore:
@@ -513,3 +524,197 @@ class MemoryStore:
             await db.execute("DELETE FROM state WHERE key LIKE 'last_extracted%';")
             await db.commit()
         log.info("memory_reset_completed")
+
+    # -----------------------------------------------------------------------
+    # Proactive Plans (FR-4.5)
+    # -----------------------------------------------------------------------
+
+    async def create_plan(
+        self,
+        date: str,
+        window_name: str,
+        planned_at: str,
+    ) -> int:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "INSERT INTO proactive_plan (date, window_name, planned_at, status) "
+                "VALUES (?, ?, ?, 'planned') "
+                "ON CONFLICT(date, window_name) DO NOTHING",
+                (date, window_name, planned_at),
+            )
+            await db.commit()
+            if cursor.lastrowid:
+                return cursor.lastrowid
+            cur = await db.execute(
+                "SELECT id FROM proactive_plan WHERE date = ? AND window_name = ?",
+                (date, window_name),
+            )
+            row = await cur.fetchone()
+            return row["id"] if row else 0
+
+    async def get_plans_for_date(self, date: str) -> list[PlanRecord]:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT id, date, window_name, planned_at, status, skip_reason, message_id "
+                "FROM proactive_plan WHERE date = ? ORDER BY planned_at ASC",
+                (date,),
+            )
+            rows = await cursor.fetchall()
+            return [
+                PlanRecord(
+                    id=r["id"],
+                    date=r["date"],
+                    window_name=r["window_name"],
+                    planned_at=r["planned_at"],
+                    status=r["status"],
+                    skip_reason=r["skip_reason"],
+                    message_id=r["message_id"],
+                )
+                for r in rows
+            ]
+
+    async def get_plan_by_id(self, plan_id: int) -> PlanRecord | None:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT id, date, window_name, planned_at, status, skip_reason, message_id "
+                "FROM proactive_plan WHERE id = ?",
+                (plan_id,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return PlanRecord(
+                id=row["id"],
+                date=row["date"],
+                window_name=row["window_name"],
+                planned_at=row["planned_at"],
+                status=row["status"],
+                skip_reason=row["skip_reason"],
+                message_id=row["message_id"],
+            )
+
+    async def get_pending_plans(self) -> list[PlanRecord]:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT id, date, window_name, planned_at, status, skip_reason, message_id "
+                "FROM proactive_plan WHERE status = 'planned' ORDER BY planned_at ASC"
+            )
+            rows = await cursor.fetchall()
+            return [
+                PlanRecord(
+                    id=r["id"],
+                    date=r["date"],
+                    window_name=r["window_name"],
+                    planned_at=r["planned_at"],
+                    status=r["status"],
+                    skip_reason=r["skip_reason"],
+                    message_id=r["message_id"],
+                )
+                for r in rows
+            ]
+
+    async def update_plan_status(
+        self,
+        plan_id: int,
+        status: str,
+        skip_reason: str | None = None,
+        message_id: int | None = None,
+    ) -> bool:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "UPDATE proactive_plan SET status = ?, skip_reason = ?, message_id = ? WHERE id = ?",
+                (status, skip_reason, message_id, plan_id),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def count_sent_proactive_for_date(self, date: str) -> int:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) as cnt FROM proactive_plan WHERE date = ? AND status = 'sent'",
+                (date,),
+            )
+            row = await cursor.fetchone()
+            return int(row["cnt"]) if row else 0
+
+    async def get_recent_proactive_messages(self, limit: int = 5) -> list[MessageRecord]:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT id, role, content, origin, proactive_type, created_at "
+                "FROM messages WHERE origin = 'proactive' ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+            return [
+                MessageRecord(
+                    id=r["id"],
+                    role=r["role"],
+                    content=r["content"],
+                    origin=r["origin"],
+                    proactive_type=r["proactive_type"],
+                    created_at=r["created_at"],
+                )
+                for r in rows
+            ]
+
+    # -----------------------------------------------------------------------
+    # Proactive Runtime State Helpers (FR-4.6, FR-4.10)
+    # -----------------------------------------------------------------------
+
+    async def update_last_user_message_time(self, ts: datetime | None = None) -> None:
+        await self.set_state("last_user_msg_at", to_utc_iso(ts or now_utc()))
+
+    async def get_last_user_message_time(self) -> datetime | None:
+        val = await self.get_state("last_user_msg_at")
+        if not val:
+            return None
+        try:
+            return from_utc_iso(val)
+        except Exception:
+            return None
+
+    async def reset_ignored_count(self) -> None:
+        await self.set_state("ignored_count", "0")
+
+    async def increment_ignored_count(self) -> int:
+        current = await self.get_ignored_count()
+        new_val = current + 1
+        await self.set_state("ignored_count", str(new_val))
+        return new_val
+
+    async def get_ignored_count(self) -> int:
+        val = await self.get_state("ignored_count", default="0")
+        try:
+            return int(val or "0")
+        except ValueError:
+            return 0
+
+    async def get_paused_until(self) -> datetime | None:
+        val = await self.get_state("paused_until")
+        if not val:
+            return None
+        try:
+            return from_utc_iso(val)
+        except Exception:
+            return None
+
+    async def set_paused_until(self, dt: datetime | None) -> None:
+        if dt is None:
+            async with self._connection() as db:
+                await db.execute("DELETE FROM state WHERE key = 'paused_until'")
+                await db.commit()
+        else:
+            await self.set_state("paused_until", to_utc_iso(dt))
+
+    async def get_owner_chat_id(self) -> int | None:
+        val = await self.get_state("owner_chat_id")
+        if not val:
+            return None
+        try:
+            return int(val)
+        except ValueError:
+            return None
+
+    async def set_owner_chat_id(self, chat_id: int) -> None:
+        await self.set_state("owner_chat_id", str(chat_id))
+

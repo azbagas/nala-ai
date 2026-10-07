@@ -26,8 +26,10 @@ from app.gateway.handlers import create_on_flush_callback, register_handlers
 from app.memory.extractor import MemoryExtractor
 from app.memory.store import MemoryStore
 from app.memory.summarizer import ConversationSummarizer
+from app.proactive.planner import plan_day
+from app.proactive.sender_job import send_proactive
 from app.utils.logging import setup_logging
-from app.utils.time import format_local_id, now_local
+from app.utils.time import format_local_id, from_utc_iso, now_local, now_utc
 
 log = logging.getLogger("app.main")
 
@@ -115,7 +117,85 @@ async def run_checks(settings: Settings) -> bool:
         except GeminiError as exc:
             ok = False
             print(f"Gemini FAIL {label}={model} {exc}")
+
+    # 5. Test Proactive Planner
+    try:
+        store = MemoryStore(settings.db_path)
+        plans = await plan_day(store, cfg.proactive, settings.tz)
+        print(f"Planner OK  {len(plans)} proactive windows planned for today")
+    except Exception as exc:
+        ok = False
+        print(f"Planner FAIL {exc!r}")
+
     return ok
+
+
+async def execute_proactive_job(app: Application, plan_id: int) -> None:
+    """Triggered by APScheduler when a proactive time arrives (PRD §8.3)."""
+    settings: Settings = app.bot_data["settings"]
+    store: MemoryStore = app.bot_data["store"]
+    gemini: GeminiClient = app.bot_data["gemini"]
+    prompt_builder: PromptBuilder = app.bot_data["prompt_builder"]
+
+    log.info("executing_scheduled_proactive_job plan_id=%d", plan_id)
+    try:
+        await send_proactive(
+            plan_id=plan_id,
+            bot=app.bot,
+            store=store,
+            gemini=gemini,
+            prompt_builder=prompt_builder,
+            proactive_cfg=settings.config.proactive,
+            conv_cfg=settings.config.conversation,
+            llm_cfg=settings.config.llm,
+            tz=settings.tz,
+            owner_id=settings.config.app.owner_telegram_id,
+            simulate_typing=True,
+        )
+    except Exception as exc:
+        log.exception("scheduled_proactive_job_failed plan_id=%d error=%r", plan_id, exc)
+
+
+async def schedule_day_proactive_jobs(app: Application) -> None:
+    """Generate or retrieve today's plan and register future jobs in APScheduler (PRD §8.2)."""
+    settings: Settings = app.bot_data["settings"]
+    store: MemoryStore = app.bot_data["store"]
+    scheduler: AsyncIOScheduler = app.bot_data["scheduler"]
+
+    try:
+        plans = await plan_day(store=store, proactive_cfg=settings.config.proactive, tz=settings.tz)
+        now_dt = now_utc()
+        scheduled_count = 0
+
+        for plan in plans:
+            if plan.status != "planned":
+                continue
+            planned_dt = from_utc_iso(plan.planned_at)
+            if planned_dt > now_dt:
+                job_id = f"proactive_job_{plan.id}"
+                scheduler.add_job(
+                    execute_proactive_job,
+                    trigger="date",
+                    run_date=planned_dt,
+                    args=[app, plan.id],
+                    id=job_id,
+                    replace_existing=True,
+                )
+                scheduled_count += 1
+                log.info(
+                    "registered_proactive_job plan_id=%d window=%s run_date=%s",
+                    plan.id,
+                    plan.window_name,
+                    planned_dt.isoformat(),
+                )
+
+        log.info(
+            "proactive_day_scheduled total_plans=%d future_registered=%d",
+            len(plans),
+            scheduled_count,
+        )
+    except Exception as exc:
+        log.exception("failed_to_schedule_proactive_jobs error=%r", exc)
 
 
 async def _post_init(app: Application) -> None:
@@ -124,7 +204,10 @@ async def _post_init(app: Application) -> None:
     store: MemoryStore = app.bot_data["store"]
     await store.init_db()
 
-    # Start APScheduler for nightly jobs
+    # Plan proactive sends and schedule future jobs for today
+    await schedule_day_proactive_jobs(app)
+
+    # Start APScheduler for nightly and proactive jobs
     scheduler: AsyncIOScheduler = app.bot_data["scheduler"]
     scheduler.start()
 
@@ -173,7 +256,7 @@ def run_bot(settings: Settings) -> None:
         on_flush=on_flush,
     )
 
-    # APScheduler for nightly jobs
+    # APScheduler for nightly jobs and proactive daily planner
     scheduler = AsyncIOScheduler(timezone=settings.config.app.timezone)
     hh, mm = settings.config.memory.nightly_job_time.split(":")
     scheduler.add_job(
@@ -190,6 +273,17 @@ def run_bot(settings: Settings) -> None:
             settings.config.memory.rolling_summary_every_days,
         ],
         id="nightly_memory_job",
+        replace_existing=True,
+    )
+
+    # Proactive daily planner runs at 00:05 WIB every day (PRD §8.2)
+    scheduler.add_job(
+        schedule_day_proactive_jobs,
+        trigger="cron",
+        hour=0,
+        minute=5,
+        args=[app],
+        id="daily_proactive_planner_job",
         replace_existing=True,
     )
 

@@ -72,3 +72,38 @@ def test_prompt_builder_missing_template(tmp_path):
     builder = PromptBuilder(tmp_path, p, WIB)
     with pytest.raises(FileNotFoundError):
         builder.build_system_prompt()
+
+
+def test_build_proactive_prompt():
+    from app.engine.prompt_builder import format_time_elapsed_id
+
+    persona = Persona(name="Nara", user_nickname="Bagas")
+    builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
+    dt = datetime(2026, 10, 7, 7, 15, tzinfo=WIB)
+
+    rendered = builder.build_proactive_prompt(
+        window_name="morning",
+        message_type="checkin",
+        time_since_last_chat="12 jam",
+        due_thread="Presentasi project besok",
+        recent_proactive=["Pagi! Udah bangun belum?"],
+        recent_messages=["User: Halo", "Nara: Hai juga"],
+        dt=dt,
+    )
+
+    assert "Bagas" in rendered
+    assert "07:15" in rendered
+    assert "morning" in rendered
+    assert "checkin" in rendered
+    assert "12 jam" in rendered
+    assert "Presentasi project besok" in rendered
+    assert "Pagi! Udah bangun belum?" in rendered
+    assert "{{" not in rendered
+    assert "}}" not in rendered
+
+    # Test time formatting
+    assert format_time_elapsed_id(30) == "baru saja"
+    assert format_time_elapsed_id(120) == "2 menit"
+    assert format_time_elapsed_id(7200) == "2 jam"
+    assert format_time_elapsed_id(86400 * 3) == "3 hari"
+

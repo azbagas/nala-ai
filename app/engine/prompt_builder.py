@@ -130,3 +130,60 @@ class PromptBuilder:
             open_threads=threads_list,
             latest_summary=summary_text,
         )
+
+    def build_proactive_prompt(
+        self,
+        *,
+        window_name: str,
+        message_type: str,
+        time_since_last_chat: str,
+        due_thread: str | None = None,
+        recent_proactive: list[str] | None = None,
+        recent_messages: list[str] | None = None,
+        dt: datetime | None = None,
+    ) -> str:
+        """Render the proactive message prompt template (prompts/proactive.id.md)."""
+        template = self._read_template("proactive.id.md")
+        now_dt = dt or now_local(self.tz)
+
+        proactive_str = (
+            "\n".join(f"- {p}" for p in recent_proactive)
+            if recent_proactive
+            else "(Belum ada pesan proaktif sebelumnya)"
+        )
+        recent_msgs_str = (
+            "\n".join(recent_messages)
+            if recent_messages
+            else "(Belum ada riwayat percakapan)"
+        )
+
+        context: dict[str, Any] = {
+            "user.nickname": self.persona.user_nickname,
+            "now_local": f"{now_dt:%H:%M}",
+            "window_name": window_name,
+            "time_since_last_chat": time_since_last_chat,
+            "message_type": message_type,
+            "due_thread_or_none": due_thread or "(Tidak ada hal tertunda khusus)",
+            "recent_proactive": proactive_str,
+            "recent_messages": recent_msgs_str,
+        }
+
+        return self._render(template, context)
+
+
+def format_time_elapsed_id(seconds: float) -> str:
+    """Format elapsed seconds into natural Indonesian description."""
+    if seconds < 60:
+        return "baru saja"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes} menit"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours} jam"
+    days = int(hours // 24)
+    if days < 7:
+        return f"{days} hari"
+    weeks = int(days // 7)
+    return f"{weeks} minggu"
+

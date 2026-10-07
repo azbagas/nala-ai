@@ -130,3 +130,63 @@ async def test_reset_memory(temp_store: MemoryStore):
     assert len(await temp_store.get_pending_threads()) == 0
     assert await temp_store.get_latest_summary() is None
     assert await temp_store.get_state("last_extracted_message_id") is None
+
+
+@pytest.mark.asyncio
+async def test_proactive_plans_and_state(temp_store: MemoryStore):
+    # Test plans
+    p1_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
+    p2_id = await temp_store.create_plan("2026-10-07", "midday", "2026-10-07T12:30:00Z")
+    assert p1_id > 0
+    assert p2_id > p1_id
+
+    # Duplicate creation should be idempotent
+    dup_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
+    assert dup_id == p1_id
+
+    plans = await temp_store.get_plans_for_date("2026-10-07")
+    assert len(plans) == 2
+    assert plans[0].window_name == "morning"
+    assert plans[1].window_name == "midday"
+
+    # Status update with foreign key to messages
+    msg_id = await temp_store.save_message(role="bot", content="Halo pagi!", origin="proactive", proactive_type="checkin")
+    updated = await temp_store.update_plan_status(p1_id, "sent", message_id=msg_id)
+    assert updated is True
+
+    p1 = await temp_store.get_plan_by_id(p1_id)
+    assert p1 is not None
+    assert p1.status == "sent"
+    assert p1.message_id == msg_id
+
+    sent_count = await temp_store.count_sent_proactive_for_date("2026-10-07")
+    assert sent_count == 1
+
+    pending = await temp_store.get_pending_plans()
+    assert len(pending) == 1
+    assert pending[0].id == p2_id
+
+    # State helpers: ignored count
+    assert await temp_store.get_ignored_count() == 0
+    await temp_store.increment_ignored_count()
+    await temp_store.increment_ignored_count()
+    assert await temp_store.get_ignored_count() == 2
+    await temp_store.reset_ignored_count()
+    assert await temp_store.get_ignored_count() == 0
+
+    # State helpers: last user message & pause
+    from datetime import datetime, timezone
+    now = datetime(2026, 10, 7, 10, 0, 0, tzinfo=timezone.utc)
+    await temp_store.update_last_user_message_time(now)
+    last_msg = await temp_store.get_last_user_message_time()
+    assert last_msg == now
+
+    await temp_store.set_paused_until(now)
+    assert await temp_store.get_paused_until() == now
+    await temp_store.set_paused_until(None)
+    assert await temp_store.get_paused_until() is None
+
+    # Owner chat id
+    await temp_store.set_owner_chat_id(123456)
+    assert await temp_store.get_owner_chat_id() == 123456
+

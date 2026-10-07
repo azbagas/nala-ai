@@ -19,6 +19,8 @@ from telegram.ext import (
     filters,
 )
 
+from datetime import timedelta
+
 from app.config import ConfigError, Settings
 from app.engine.conversation import ConversationEngine, FALLBACK_REPLY
 from app.engine.gemini_client import GeminiClient, GeminiError
@@ -28,7 +30,7 @@ from app.gateway.sender import send_bubbles
 from app.memory.extractor import MemoryExtractor
 from app.memory.store import MemoryStore
 from app.memory.summarizer import ConversationSummarizer
-from app.utils.time import format_local_id, now_local
+from app.utils.time import format_local_id, from_utc_iso, now_local, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -274,9 +276,167 @@ async def text_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id if update.effective_chat else user.id
     log.info("inbound_message user_id=%s chat_id=%s chars=%d", user.id, chat_id, len(msg.text))
 
+    if "store" in ctx.application.bot_data and chat_id:
+        try:
+            await _store(ctx).set_owner_chat_id(chat_id)
+        except Exception as exc:
+            log.warning("failed_to_save_owner_chat_id error=%r", exc)
+
     # Feed incoming text into the debouncer
     debouncer = _debouncer(ctx)
     await debouncer.add_message(user_id=user.id, chat_id=chat_id, text=msg.text)
+
+
+async def status_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows today's plan, counters, and pause state (FR-4.6, P1)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    store = _store(ctx)
+    now_dt = now_local(settings.tz)
+    today_str = now_dt.strftime("%Y-%m-%d")
+
+    plans = await store.get_plans_for_date(today_str)
+    ignored = await store.get_ignored_count()
+    paused_until = await store.get_paused_until()
+    last_user_msg = await store.get_last_user_message_time()
+
+    lines = [
+        f"📊 <b>Status Proaktif {settings.persona.name}</b>",
+        f"📅 Hari ini: <code>{today_str}</code> (WIB)\n",
+        "⏰ <b>Jadwal Pesan Proaktif:</b>",
+    ]
+
+    if plans:
+        for p in plans:
+            planned_local = from_utc_iso(p.planned_at).astimezone(settings.tz)
+            status_badge = {
+                "planned": "⏳ direncanakan",
+                "sent": "✅ terkirim",
+                "skipped": f"⏭️ dilewati ({p.skip_reason or 'unknown'})",
+                "failed": f"❌ gagal ({p.skip_reason or 'unknown'})",
+            }.get(p.status, p.status)
+            lines.append(f"• <code>{planned_local:%H:%M}</code> [{p.window_name}]: {status_badge}")
+    else:
+        lines.append("<i>(Belum ada jadwal yang dibuat untuk hari ini)</i>")
+
+    lines.append("\n⚙️ <b>Status Sistem:</b>")
+    lines.append(f"• Pesan diabaikan berturut-turut: <code>{ignored}</code>")
+    if paused_until:
+        paused_local = paused_until.astimezone(settings.tz)
+        if paused_local > now_dt:
+            lines.append(f"• Jeda aktif sampai: <code>{paused_local:%H:%M} WIB</code>")
+        else:
+            lines.append("• Jeda aktif: <i>Tidak</i>")
+    else:
+        lines.append("• Jeda aktif: <i>Tidak</i>")
+
+    if last_user_msg:
+        last_local = last_user_msg.astimezone(settings.tz)
+        lines.append(f"• Obrolan kamu terakhir: <code>{last_local:%H:%M} WIB</code>")
+    else:
+        lines.append("• Obrolan kamu terakhir: <i>(Belum ada)</i>")
+
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def pause_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Stops proactive messages for a duration (FR-4.6, P0)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    now_dt = now_local(settings.tz)
+    arg = ctx.args[0].lower() if ctx.args else "3h"
+
+    if arg in ("today", "hari_ini", "hariini"):
+        target_dt = now_dt.replace(hour=23, minute=59, second=59)
+    elif arg.endswith("m"):
+        try:
+            minutes = int(arg[:-1])
+            target_dt = now_dt + timedelta(minutes=minutes)
+        except ValueError:
+            target_dt = now_dt + timedelta(hours=3)
+    elif arg.endswith("h") or arg.endswith("j"):
+        try:
+            hours = int(arg[:-1])
+            target_dt = now_dt + timedelta(hours=hours)
+        except ValueError:
+            target_dt = now_dt + timedelta(hours=3)
+    elif arg.endswith("d") or arg.endswith("hari"):
+        try:
+            days = int(arg[:-1].replace("hari", ""))
+            target_dt = now_dt + timedelta(days=days)
+        except ValueError:
+            target_dt = now_dt + timedelta(days=1)
+    else:
+        try:
+            hours = int(arg)
+            target_dt = now_dt + timedelta(hours=hours)
+        except ValueError:
+            target_dt = now_dt + timedelta(hours=3)
+
+    store = _store(ctx)
+    await store.set_paused_until(target_dt)
+    await update.effective_message.reply_text(
+        f"Oke! Aku gak bakal chat duluan sampai <b>{target_dt:%H:%M} WIB</b> ya ⏸️",
+        parse_mode="HTML",
+    )
+
+
+async def resume_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Resumes proactive messages (FR-4.6, P0)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    store = _store(ctx)
+    await store.set_paused_until(None)
+    await update.effective_message.reply_text("Pesan proaktif diaktifkan kembali ya ▶️")
+
+
+async def test_proactive_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manual trigger to test a proactive message immediately."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    chat_id = update.effective_chat.id if update.effective_chat else update.effective_user.id
+    store = _store(ctx)
+    await store.set_owner_chat_id(chat_id)
+
+    window_name = ctx.args[0] if ctx.args else "manual"
+    now_dt = now_local(settings.tz)
+    today_str = now_dt.strftime("%Y-%m-%d")
+
+    plan_id = await store.create_plan(today_str, window_name, to_utc_iso(now_dt))
+    # Reset status to planned if it already existed
+    await store.update_plan_status(plan_id, "planned")
+
+    await update.effective_message.reply_text("🚀 Menjalankan tes pesan proaktif...")
+
+    from app.proactive.sender_job import send_proactive
+
+    sent = await send_proactive(
+        plan_id=plan_id,
+        bot=ctx.bot,
+        store=store,
+        gemini=_gemini(ctx),
+        prompt_builder=_prompt_builder(ctx),
+        proactive_cfg=settings.config.proactive,
+        conv_cfg=settings.config.conversation,
+        llm_cfg=settings.config.llm,
+        tz=settings.tz,
+        owner_id=chat_id,
+        simulate_typing=True,
+    )
+    if not sent:
+        plan = await store.get_plan_by_id(plan_id)
+        reason = plan.skip_reason if plan else "unknown"
+        await update.effective_message.reply_text(
+            f"⚠️ Pesan proaktif tidak dikirim (status: {plan.status if plan else 'none'}, reason: {reason})"
+        )
 
 
 async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -321,5 +481,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("forget", forget_fact))
     app.add_handler(CommandHandler("reset_memory", reset_memory_command))
     app.add_handler(CommandHandler(["run_nightly", "extract_memory"], run_nightly_command))
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("pause", pause_command))
+    app.add_handler(CommandHandler("resume", resume_command))
+    app.add_handler(CommandHandler(["test_proactive", "trigger_proactive"], test_proactive_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))
     app.add_error_handler(on_error)

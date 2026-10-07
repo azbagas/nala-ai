@@ -10,7 +10,7 @@ See [PRD_AI_Companion_Bot.md](PRD_AI_Companion_Bot.md) for the full spec.
 | **M0** | Repo, Docker skeleton, config loader, connectivity check | ✅ |
 | **M1** | Basic persona chat, bubbles, typing delay, debouncing | ✅ |
 | **M2** | SQLite memory, extraction, summaries, memory commands | ✅ |
-| M3 | Proactive planner | ⏳ |
+| **M3** | Proactive planner with windows, persistence, pre-send checks, quiet hours | ✅ |
 | M4 | Her daily life | ⏳ |
 | M5 | Controls & polish | ⏳ |
 | M6 | Deploy & harden | ⏳ |
@@ -42,6 +42,10 @@ It replies with your numeric ID. Put it in `.env` and restart. After that, every
 | `/reset_memory` | Wipes remembered facts, open threads, summaries, and chat history |
 | `/run_nightly` | Runs the memory extraction and daily summary job manually |
 | `/clear` or `/reset` | Clears recent in-memory conversation history |
+| `/status` | Shows today's proactive plan, counters, and pause state |
+| `/pause [duration]` | Pauses proactive messages (e.g., `/pause 3h`, `/pause today`, `/pause 30m`) |
+| `/resume` | Resumes proactive messages |
+| `/test_proactive` | Manually triggers a proactive message immediately for testing |
 
 ## Docker
 
