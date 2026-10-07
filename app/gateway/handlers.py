@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.config import ConfigError, Settings
 from app.engine.conversation import ConversationEngine, FALLBACK_REPLY
@@ -338,13 +338,66 @@ async def status_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     else:
         lines.append("• Jeda aktif: <i>Tidak</i>")
 
+    freq = await store.get_state("proactive_frequency", default="normal")
+    lines.append(f"• Frekuensi proaktif: <code>{freq}</code>")
+
     if last_user_msg:
         last_local = last_user_msg.astimezone(settings.tz)
         lines.append(f"• Obrolan kamu terakhir: <code>{last_local:%H:%M} WIB</code>")
     else:
         lines.append("• Obrolan kamu terakhir: <i>(Belum ada)</i>")
 
+    # Observability & token stats (PRD §14.3)
+    try:
+        now_utc_str = now_local(settings.tz).astimezone(timezone.utc).strftime("%Y-%m-%d")
+        llm_stats = await store.get_today_llm_stats(now_utc_str)
+        if llm_stats["total_calls"] > 0:
+            lines.append("\n📈 <b>Statistik Model & Biaya Hari Ini:</b>")
+            lines.append(f"• Total panggilan LLM: <code>{llm_stats['total_calls']}</code>")
+            lines.append(f"• Token input / output: <code>{llm_stats['total_input_tokens']}</code> / <code>{llm_stats['total_output_tokens']}</code>")
+            lines.append(f"• Rata-rata latensi: <code>{llm_stats['avg_latency_ms']} ms</code>")
+    except Exception as exc:
+        log.warning("failed_to_fetch_llm_stats error=%r", exc)
+
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def frequency_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Adjust proactive messaging frequency: low, normal, high (FR-4.6, P2)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    store = _store(ctx)
+
+    if not ctx.args:
+        current_freq = await store.get_state("proactive_frequency", default="normal")
+        await update.effective_message.reply_text(
+            f"🎚️ <b>Frekuensi Pesan Proaktif Saat Ini:</b> <code>{current_freq}</code>\n\n"
+            "Gunakan: <code>/frequency &lt;low|normal|high&gt;</code>\n"
+            "• <b>low</b>: Lebih santai/jarang (maks 2 pesan/hari)\n"
+            "• <b>normal</b>: Standar sesuai config (maks 4 pesan/hari)\n"
+            "• <b>high</b>: Lebih sering dan aktif (maks 5 pesan/hari)",
+            parse_mode="HTML",
+        )
+        return
+
+    choice = ctx.args[0].lower()
+    if choice not in ("low", "normal", "high"):
+        await update.effective_message.reply_text("Pilihan tidak valid. Gunakan: `/frequency low`, `/frequency normal`, atau `/frequency high`.")
+        return
+
+    await store.set_state("proactive_frequency", choice)
+    labels = {
+        "low": "santai / jarang (maks 2x sehari)",
+        "normal": "standar (maks 4x sehari)",
+        "high": "lebih aktif (maks 5x sehari)",
+    }
+    await update.effective_message.reply_text(
+        f"✅ Frekuensi proaktif diatur ke <b>{choice}</b> ({labels[choice]}).\n"
+        "Pengaturan ini akan diterapkan pada penjadwalan berikutnya.",
+        parse_mode="HTML",
+    )
 
 
 async def pause_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -532,8 +585,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("reset_memory", reset_memory_command))
     app.add_handler(CommandHandler(["run_nightly", "extract_memory"], run_nightly_command))
     app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("pause", pause_command))
-    app.add_handler(CommandHandler("resume", resume_command))
+    app.add_handler(CommandHandler(["pause", "jeda"], pause_command))
+    app.add_handler(CommandHandler(["resume", "lanjut"], resume_command))
+    app.add_handler(CommandHandler(["frequency", "frekuensi"], frequency_command))
     app.add_handler(CommandHandler(["test_proactive", "trigger_proactive"], test_proactive_command))
     app.add_handler(CommandHandler(["life", "jadwal"], life_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))

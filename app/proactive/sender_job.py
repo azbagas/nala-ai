@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -70,6 +71,36 @@ def choose_message_type(
     candidate_weights = [weights.get(k, 1.0) for k in available]
     chosen = _rng.choices(available, weights=candidate_weights, k=1)[0]
     return chosen
+
+
+def compute_text_similarity(a: str, b: str) -> float:
+    """Compute word-level Jaccard similarity between two texts (PRD §10)."""
+    words_a = set(re.findall(r"\w+", a.lower()))
+    words_b = set(re.findall(r"\w+", b.lower()))
+    if not words_a or not words_b:
+        return 0.0
+    return len(words_a & words_b) / len(words_a | words_b)
+
+
+def is_too_similar(candidate: str, past_texts: list[str], threshold: float = 0.55) -> tuple[bool, str | None]:
+    """Check if candidate text is overly similar to any past message or opening phrase (PRD §10)."""
+    cand_lower = candidate.strip().lower()
+    cand_words = re.findall(r"\w+", cand_lower)
+
+    for past in past_texts:
+        past_lower = past.strip().lower()
+        # 1. Word Jaccard similarity
+        sim = compute_text_similarity(cand_lower, past_lower)
+        if sim >= threshold:
+            return True, past
+
+        # 2. Check opening prefix overlap (first 3 words)
+        past_words = re.findall(r"\w+", past_lower)
+        if len(cand_words) >= 3 and len(past_words) >= 3:
+            if cand_words[:3] == past_words[:3]:
+                return True, past
+
+    return False, None
 
 
 async def send_proactive(
@@ -195,12 +226,22 @@ async def send_proactive(
         await store.update_plan_status(plan_id, status="failed", skip_reason=f"gemini_error: {exc}")
         return False
 
-    # Validation & retry if quality flagged (PRD §10)
-    if contains_assistant_voice(raw_text) or is_predominantly_english(raw_text):
-        log.warning("proactive_quality_flagged plan_id=%d raw=%r -> retrying once", plan_id, raw_text[:80])
+    # Validation & retry if quality flagged or repetitive (PRD §10)
+    needs_retry = contains_assistant_voice(raw_text) or is_predominantly_english(raw_text)
+    too_similar, dup_text = is_too_similar(raw_text, recent_proactive_texts)
+
+    if needs_retry or too_similar:
+        retry_prompt = proactive_prompt
+        if needs_retry:
+            log.warning("proactive_quality_flagged plan_id=%d raw=%r -> retrying once", plan_id, raw_text[:80])
+            retry_prompt += "\n\nIngat: Bahasa Indonesia santai chat, jangan gaya asisten AI."
+        elif too_similar:
+            log.warning("proactive_repetition_flagged plan_id=%d dup=%r -> retrying once", plan_id, (dup_text or "")[:60])
+            retry_prompt += f"\n\nPENTING: Pesanmu mirip dengan pesan sebelumnya ('{dup_text}'). Ganti sapaan dan topik yang berbeda!"
+
         try:
             retry_res = await gemini.generate(
-                contents=proactive_prompt + "\n\nIngat: Bahasa Indonesia santai chat, jangan gaya asisten AI.",
+                contents=retry_prompt,
                 model=llm_cfg.chat_model,
                 system_instruction=system_instruction,
                 temperature=llm_cfg.temperature_chat,

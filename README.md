@@ -12,7 +12,7 @@ See [PRD_AI_Companion_Bot.md](PRD_AI_Companion_Bot.md) for the full spec.
 | **M2** | SQLite memory, extraction, summaries, memory commands | ✅ |
 | **M3** | Proactive planner with windows, persistence, pre-send checks, quiet hours | ✅ |
 | **M4** | Her daily life (schedule generation, mood/energy, activity matching) | ✅ |
-| M5 | Controls & polish | ⏳ |
+| **M5** | Controls & polish (natural language pauses, anti-repetition, frequency, token stats) | ✅ |
 | M6 | Deploy & harden | ⏳ |
 
 ## Quick start (local)
@@ -42,11 +42,19 @@ It replies with your numeric ID. Put it in `.env` and restart. After that, every
 | `/reset_memory` | Wipes remembered facts, open threads, summaries, and chat history |
 | `/run_nightly` | Runs the memory extraction and daily summary job manually |
 | `/clear` or `/reset` | Clears recent in-memory conversation history |
-| `/status` | Shows today's proactive plan, counters, and pause state |
+| `/status` | Shows today's proactive plan, counters, pause state, and token usage / latency stats |
+| `/frequency [low|normal|high]` | Adjusts proactive messaging frequency (low: 2x/day, normal: 4x/day, high: 5x/day) |
 | `/pause [duration]` | Pauses proactive messages (e.g., `/pause 3h`, `/pause today`, `/pause 30m`) |
 | `/resume` | Resumes proactive messages |
 | `/test_proactive` | Manually triggers a proactive message immediately for testing |
 | `/life [reroll]` | Views her current activity, mood, energy, and full schedule (or rerolls it) |
+
+> **Natural Language Controls:** In addition to commands, you can pause or resume naturally in chat! For example:
+> - *"aku mau tidur dulu ya"* -> Pauses until next morning (06:00 WIB).
+> - *"jangan chat dulu hari ini"* -> Pauses until midnight.
+> - *"lagi sibuk 2 jam"* -> Pauses for 2 hours.
+> - *"udah bangun"* / *"aku udah luang"* -> Resumes proactive messages immediately.
+
 
 ## Docker
 

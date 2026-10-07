@@ -243,3 +243,41 @@ async def test_daily_life_storage(temp_store: MemoryStore):
     assert recents[1].date == "2026-10-06"
 
 
+@pytest.mark.asyncio
+async def test_get_today_llm_stats(temp_store: MemoryStore):
+    today = "2026-10-07"
+    # Initially 0 stats
+    stats = await temp_store.get_today_llm_stats(today)
+    assert stats["total_calls"] == 0
+    assert stats["total_input_tokens"] == 0
+    assert stats["total_output_tokens"] == 0
+    assert stats["avg_latency_ms"] == 0
+    assert stats["success_rate"] == 1.0
+
+    # Insert multiple calls
+    await temp_store.log_llm_call(
+        purpose="chat",
+        model="gemini-2.5-flash",
+        input_tokens=100,
+        output_tokens=50,
+        latency_ms=200,
+        success=True,
+    )
+    await temp_store.log_llm_call(
+        purpose="proactive",
+        model="gemini-2.5-flash",
+        input_tokens=150,
+        output_tokens=50,
+        latency_ms=400,
+        success=False,
+    )
+
+    stats = await temp_store.get_today_llm_stats(today)
+    assert stats["total_calls"] == 2
+    assert stats["total_input_tokens"] == 250
+    assert stats["total_output_tokens"] == 100
+    assert stats["avg_latency_ms"] == 300
+    assert stats["success_rate"] == 0.5
+
+
+

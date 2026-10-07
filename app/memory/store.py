@@ -531,6 +531,38 @@ class MemoryStore:
             )
             await db.commit()
 
+    async def get_today_llm_stats(self, date_utc: str) -> dict[str, Any]:
+        """Fetch LLM calls statistics for a specific UTC date."""
+        prefix = f"{date_utc}%"
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) as total_calls, "
+                "COALESCE(SUM(input_tokens), 0) as total_input, "
+                "COALESCE(SUM(output_tokens), 0) as total_output, "
+                "COALESCE(AVG(latency_ms), 0) as avg_latency, "
+                "COALESCE(SUM(success), 0) as success_calls "
+                "FROM llm_calls WHERE created_at LIKE ?",
+                (prefix,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return {
+                    "total_calls": 0,
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                    "avg_latency_ms": 0,
+                    "success_rate": 1.0,
+                }
+            total = int(row["total_calls"])
+            success = int(row["success_calls"])
+            return {
+                "total_calls": total,
+                "total_input_tokens": int(row["total_input"]),
+                "total_output_tokens": int(row["total_output"]),
+                "avg_latency_ms": int(row["avg_latency"]),
+                "success_rate": (success / total) if total > 0 else 1.0,
+            }
+
     # -----------------------------------------------------------------------
     # Memory Reset (FR-3.7)
     # -----------------------------------------------------------------------

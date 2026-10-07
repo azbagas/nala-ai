@@ -165,6 +165,25 @@ class ConversationEngine:
         else:
             system_instruction = self.prompt_builder.build_system_prompt()
 
+        # Check natural language control intent (PRD §4.6, §8.1 step 4)
+        if self.store and hasattr(self.store, "set_paused_until"):
+            try:
+                from app.engine.intent import detect_natural_control_intent
+                intent = detect_natural_control_intent(clean_user_text, tz=self.prompt_builder.tz)
+                if intent.is_pause and intent.pause_until:
+                    log.info("natural_pause_detected reason=%s until=%s", intent.reason, intent.pause_until.isoformat())
+                    await self.store.set_paused_until(intent.pause_until)
+                    system_instruction += (
+                        "\n\nPENTING: User baru saja pamit tidur atau minta jangan dichat dulu. "
+                        "Balas dengan hangat, singkat, dan pengertian (ucapkan selamat tidur/istirahat atau semangat), "
+                        "dan JANGAN bertanya balik."
+                    )
+                elif intent.is_resume:
+                    log.info("natural_resume_detected reason=%s", intent.reason)
+                    await self.store.set_paused_until(None)
+            except Exception as exc:
+                log.warning("natural_intent_check_failed error=%r", exc)
+
         contents = await self._build_contents(clean_user_text)
 
         # 1. First attempt to generate reply

@@ -52,12 +52,24 @@ async def plan_day(
         )
         return existing_plans
 
-    # 2. Roll for each configured window
+    # 2. Check frequency setting from state (PRD §4.6)
+    freq = (await store.get_state("proactive_frequency", default="normal") or "normal").lower()
+    if freq == "low":
+        effective_cap = max(1, proactive_cfg.daily_cap // 2)
+        chance_mult = 0.6
+    elif freq == "high":
+        effective_cap = proactive_cfg.daily_cap + 1
+        chance_mult = 1.2
+    else:
+        effective_cap = proactive_cfg.daily_cap
+        chance_mult = 1.0
+
     candidates: list[tuple[str, datetime]] = []
 
     for window in proactive_cfg.windows:
-        # Roll against probability chance
-        if _rng.random() > window.chance:
+        # Roll against probability chance scaled by frequency
+        eff_chance = min(1.0, window.chance * chance_mult)
+        if _rng.random() > eff_chance:
             continue
 
         start_time = parse_hhmm(window.start)
@@ -91,7 +103,8 @@ async def plan_day(
         candidates.append((window.name, planned_dt))
 
     # 3. Roll for bonus spontaneous message (FR-4.9)
-    if proactive_cfg.bonus.max_per_day > 0 and _rng.random() <= proactive_cfg.bonus.chance:
+    eff_bonus_chance = min(1.0, proactive_cfg.bonus.chance * chance_mult)
+    if proactive_cfg.bonus.max_per_day > 0 and _rng.random() <= eff_bonus_chance:
         bonus_start = parse_hhmm(proactive_cfg.bonus.awake_start)
         bonus_end = parse_hhmm(proactive_cfg.bonus.awake_end)
 
@@ -114,9 +127,9 @@ async def plan_day(
     # 4. Enforce daily cap (FR-4.4, §8.2)
     # Sort chronologically
     candidates.sort(key=lambda c: c[1])
-    if len(candidates) > proactive_cfg.daily_cap:
-        # Keep up to daily_cap entries
-        candidates = candidates[: proactive_cfg.daily_cap]
+    if len(candidates) > effective_cap:
+        # Keep up to effective_cap entries
+        candidates = candidates[: effective_cap]
 
     # 5. Persist candidates to database
     for window_name, planned_dt in candidates:

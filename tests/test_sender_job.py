@@ -10,7 +10,13 @@ from app.config import ConversationSection, LLMSection, Persona, ProactiveSectio
 from app.engine.gemini_client import GeminiClient, GeminiResult
 from app.engine.prompt_builder import PromptBuilder
 from app.memory.store import MemoryStore, ThreadRecord
-from app.proactive.sender_job import choose_message_type, find_due_thread, send_proactive
+from app.proactive.sender_job import (
+    choose_message_type,
+    compute_text_similarity,
+    find_due_thread,
+    is_too_similar,
+    send_proactive,
+)
 
 WIB = ZoneInfo("Asia/Jakarta")
 
@@ -203,3 +209,91 @@ async def test_send_proactive_skipped_presend(temp_store, mock_gemini, prompt_bu
     assert plan.status == "skipped"
     assert plan.skip_reason == "quiet_hours"
     mock_gemini.generate.assert_not_called()
+
+
+def test_compute_text_similarity():
+    assert compute_text_similarity("", "") == 0.0
+    assert compute_text_similarity("Halo apa kabar", "halo apa kabar") == 1.0
+    assert compute_text_similarity("kucing tidur", "anjing lari") == 0.0
+    sim = compute_text_similarity("pagi, udah bangun belum?", "pagi, kamu udah sarapan belum?")
+    assert 0.3 < sim < 0.9
+
+
+def test_is_too_similar():
+    past = ["Pagi! Udah bangun belum?", "Semangat kerjanya ya hari ini!"]
+
+    # Prefix match (first 3 words: "pagi", "udah", "bangun")
+    flagged, match = is_too_similar("Pagi! Udah bangun kan?", past)
+    assert flagged is True
+    assert match == past[0]
+
+    # High Jaccard similarity (distinct prefix but same words)
+    flagged, match = is_too_similar("Hari ini semangat kerjanya ya!", past)
+    assert flagged is True
+    assert match == past[1]
+
+    # Non-similar text
+    flagged, match = is_too_similar("Lagi asyik nonton film nih, seru banget.", past)
+    assert flagged is False
+    assert match is None
+
+
+@pytest.mark.asyncio
+async def test_send_proactive_repetition_retry(temp_store, prompt_builder, proactive_cfg):
+    # Save a past proactive message
+    await temp_store.save_message("bot", "Pagi! Udah sarapan belum?", origin="proactive", proactive_type="checkin")
+    await temp_store.set_owner_chat_id(99999)
+
+    p_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
+
+    # Mock gemini to return a duplicate on 1st call, and unique text on 2nd call
+    call_count = 0
+
+    async def mock_generate(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return GeminiResult(
+                text="Pagi! Udah sarapan belum?",
+                model="gemini-test",
+                input_tokens=100,
+                output_tokens=20,
+                latency_ms=200,
+            )
+        return GeminiResult(
+            text="Lagi santai nih, cuaca hari ini cerah banget ya!",
+            model="gemini-test",
+            input_tokens=120,
+            output_tokens=25,
+            latency_ms=220,
+        )
+
+    mock_gemini = MagicMock(spec=GeminiClient)
+    mock_gemini.generate = AsyncMock(side_effect=mock_generate)
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    bot.send_chat_action = AsyncMock()
+
+    now = datetime(2026, 10, 7, 3, 0, 0, tzinfo=timezone.utc)
+    success = await send_proactive(
+        plan_id=p_id,
+        bot=bot,
+        store=temp_store,
+        gemini=mock_gemini,
+        prompt_builder=prompt_builder,
+        proactive_cfg=proactive_cfg,
+        conv_cfg=ConversationSection(),
+        llm_cfg=LLMSection(chat_model="gemini-test", utility_model="gemini-test"),
+        tz=WIB,
+        now=now,
+        simulate_typing=False,
+    )
+
+    assert success is True
+    # Gemini should have been called twice (1st duplicate -> retry -> 2nd accepted)
+    assert call_count == 2
+    # Verify sent message is the fresh text
+    sent_text = bot.send_message.call_args_list[0].kwargs.get("text") or bot.send_message.call_args_list[0].args[1]
+    assert "cuaca hari ini cerah banget" in sent_text
+

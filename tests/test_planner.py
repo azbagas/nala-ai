@@ -147,3 +147,47 @@ async def test_plan_day_bonus_window(temp_store: MemoryStore):
     window_names = [p.window_name for p in plans]
     assert "morning" in window_names
     assert "bonus" in window_names
+
+
+@pytest.mark.asyncio
+async def test_plan_day_frequency_low(temp_store: MemoryStore, proactive_cfg: ProactiveSection):
+    tz = ZoneInfo("Asia/Jakarta")
+    now = datetime(2026, 10, 6, 22, 0, 0, tzinfo=timezone.utc)
+    rng = random.Random(42)
+
+    await temp_store.set_state("proactive_frequency", "low")
+
+    # proactive_cfg has daily_cap=4, 4 windows. Low frequency scales effective_cap to 4 // 2 = 2.
+    plans = await plan_day(temp_store, proactive_cfg, tz, target_date=date(2026, 10, 7), now=now, rng=rng)
+    assert len(plans) == 2
+
+
+@pytest.mark.asyncio
+async def test_plan_day_frequency_high(temp_store: MemoryStore):
+    tz = ZoneInfo("Asia/Jakarta")
+    now = datetime(2026, 10, 6, 22, 0, 0, tzinfo=timezone.utc)
+    rng = random.Random(42)
+
+    cfg = ProactiveSection(
+        daily_cap=3,
+        quiet_hours=TimeRange(start="22:00", end="06:00"),
+        windows=[
+            Window(name="w1", start="06:00", end="08:00", chance=1.0),
+            Window(name="w2", start="09:00", end="11:00", chance=1.0),
+            Window(name="w3", start="12:00", end="14:00", chance=1.0),
+            Window(name="w4", start="15:00", end="17:00", chance=1.0),
+            Window(name="w5", start="18:00", end="20:00", chance=1.0),
+        ],
+        bonus=Bonus(chance=0.0, max_per_day=0),
+        skip_if_user_active_within_minutes=20,
+        backoff_after_ignored=2,
+        stop_after_ignored=4,
+        message_type_weights={"checkin": 3},
+    )
+
+    await temp_store.set_state("proactive_frequency", "high")
+
+    # daily_cap=3, high frequency scales effective_cap to 3 + 1 = 4.
+    plans = await plan_day(temp_store, cfg, tz, target_date=date(2026, 10, 7), now=now, rng=rng)
+    assert len(plans) == 4
+
