@@ -542,6 +542,47 @@ async def life_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
+async def backup_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manually creates a timestamped SQLite database backup (Milestone M6)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    from app.memory.backup import perform_backup
+
+    try:
+        bk_path = perform_backup(
+            db_path=settings.db_path,
+            backup_dir=settings.backup_dir,
+            keep_days=settings.config.backup.keep_days,
+        )
+        size_kb = bk_path.stat().st_size / 1024
+        await update.effective_message.reply_text(
+            f"✅ Backup database berhasil dibuat!\n"
+            f"📁 File: <code>{bk_path.name}</code>\n"
+            f"📦 Ukuran: <code>{size_kb:.1f} KB</code>\n"
+            f"🗄️ Direktori: <code>{settings.backup_dir}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        log.exception("manual_backup_failed error=%r", exc)
+        await update.effective_message.reply_text(f"❌ Gagal membuat backup: {exc}")
+
+
+async def non_text_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Acknowledges non-text messages (photos, voice, stickers) naturally in Indonesian (PRD §13)."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or update.effective_message is None:
+        return
+
+    # Reset ignored count so proactive backoff knows user interacted
+    store = _store(ctx)
+    await store.reset_ignored_count()
+
+    reply = f"aku belum bisa liat atau denger itu nih 🥺 ceritain langsung aja yaa {settings.persona.user_nickname}!"
+    await update.effective_message.reply_text(reply)
+
+
 async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     log.exception("handler_error", exc_info=ctx.error)
 
@@ -590,5 +631,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler(["frequency", "frekuensi"], frequency_command))
     app.add_handler(CommandHandler(["test_proactive", "trigger_proactive"], test_proactive_command))
     app.add_handler(CommandHandler(["life", "jadwal"], life_command))
+    app.add_handler(CommandHandler(["backup", "cadangkan"], backup_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))
+    app.add_handler(MessageHandler(~filters.COMMAND & ~filters.TEXT, non_text_message))
     app.add_error_handler(on_error)
+

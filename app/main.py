@@ -72,6 +72,18 @@ async def run_nightly_job(
         log.exception("nightly_memory_job_failed error=%r", exc)
 
 
+async def run_backup_job(db_path: Path, backup_dir: Path, keep_days: int) -> None:
+    """Scheduled automated SQLite backup job (PRD §8.4, Milestone M6)."""
+    log.info("daily_backup_job_started")
+    try:
+        from app.memory.backup import perform_backup
+        backup_path = perform_backup(db_path=db_path, backup_dir=backup_dir, keep_days=keep_days)
+        log.info("daily_backup_job_completed file=%s size_bytes=%d", backup_path.name, backup_path.stat().st_size)
+    except Exception as exc:
+        log.exception("daily_backup_job_failed error=%r", exc)
+
+
+
 async def run_checks(settings: Settings) -> bool:
     ok = True
     cfg = settings.config
@@ -137,7 +149,18 @@ async def run_checks(settings: Settings) -> bool:
         ok = False
         print(f"Life FAIL   {exc!r}")
 
+    # 7. Test SQLite Backup
+    try:
+        from app.memory.backup import perform_backup, verify_backup_integrity
+        bk_file = perform_backup(settings.db_path, settings.backup_dir, keep_days=settings.config.backup.keep_days)
+        assert verify_backup_integrity(bk_file)
+        print(f"Backup OK   {bk_file.name} ({bk_file.stat().st_size} bytes)")
+    except Exception as exc:
+        ok = False
+        print(f"Backup FAIL {exc!r}")
+
     return ok
+
 
 
 async def execute_proactive_job(app: Application, plan_id: int) -> None:
@@ -334,6 +357,19 @@ def run_bot(settings: Settings) -> None:
         id="daily_proactive_planner_job",
         replace_existing=True,
     )
+
+    # Daily SQLite backup runs at 03:00 WIB every day (PRD §8.4, Milestone M6)
+    bk_hh, bk_mm = settings.config.backup.daily_time.split(":")
+    scheduler.add_job(
+        run_backup_job,
+        trigger="cron",
+        hour=int(bk_hh),
+        minute=int(bk_mm),
+        args=[settings.db_path, settings.backup_dir, settings.config.backup.keep_days],
+        id="daily_backup_job",
+        replace_existing=True,
+    )
+
 
     app.bot_data["settings"] = settings
     app.bot_data["store"] = store

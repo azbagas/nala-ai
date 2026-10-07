@@ -16,7 +16,14 @@ from app.config import (
     TimeRange,
     Window,
 )
-from app.gateway.handlers import frequency_command, pause_command, resume_command, status_command
+from app.gateway.handlers import (
+    backup_command,
+    frequency_command,
+    non_text_message,
+    pause_command,
+    resume_command,
+    status_command,
+)
 from app.memory.store import MemoryStore
 
 WIB = ZoneInfo("Asia/Jakarta")
@@ -135,3 +142,33 @@ async def test_status_command_with_llm_stats(mock_settings, temp_store):
     assert "Status Proaktif Nara" in text
     assert "Statistik Model & Biaya Hari Ini" in text
     assert "Total panggilan LLM" in text
+
+
+@pytest.mark.asyncio
+async def test_backup_command(mock_settings, temp_store, tmp_path):
+    mock_settings.data_dir = tmp_path
+    mock_settings.config.storage.db_path = temp_store.db_path.name
+    mock_settings.config.storage.backup_dir = "backups"
+
+
+    update, ctx = create_mock_update_and_ctx(mock_settings, temp_store, args=[])
+    await backup_command(update, ctx)
+
+    text = update.effective_message.reply_text.call_args[0][0]
+    assert "Backup database berhasil dibuat!" in text
+    assert "File:" in text
+
+
+@pytest.mark.asyncio
+async def test_non_text_message(mock_settings, temp_store):
+    await temp_store.set_state("ignored_count", "3")
+    assert await temp_store.get_ignored_count() == 3
+
+    update, ctx = create_mock_update_and_ctx(mock_settings, temp_store)
+    await non_text_message(update, ctx)
+
+    text = update.effective_message.reply_text.call_args[0][0]
+    assert "aku belum bisa liat atau denger itu nih" in text
+    # Ignored count should be reset to 0
+    assert await temp_store.get_ignored_count() == 0
+

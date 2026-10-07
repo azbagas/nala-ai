@@ -1,0 +1,26 @@
+[Unit]
+Description=Proactive AI Companion Bot (Telegram + Gemini)
+After=network.target
+
+[Service]
+Type=simple
+User=companion
+Group=companion
+WorkingDirectory=/opt/proactive-ai-companion-bot
+ExecStart=/opt/proactive-ai-companion-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5s
+
+# Hardening / Sandboxing
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Jakarta
+EnvironmentFile=/opt/proactive-ai-companion-bot/.env
+
+[Install]
+WantedBy=multi-user.target

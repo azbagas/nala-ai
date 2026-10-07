@@ -13,6 +13,8 @@ RUN pip install -r requirements.txt
 COPY app ./app
 COPY config ./config
 COPY prompts ./prompts
+COPY deploy ./deploy
+
 
 RUN useradd --create-home --uid 1000 companion \
     && mkdir -p /app/data \
