@@ -11,6 +11,7 @@ import asyncio
 import logging
 import sys
 from datetime import timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -27,7 +28,7 @@ from app.life.simulator import LifeSimulator
 from app.memory.extractor import MemoryExtractor
 from app.memory.store import MemoryStore
 from app.memory.summarizer import ConversationSummarizer
-from app.proactive.planner import plan_day
+from app.proactive.planner import plan_day, resolve_overdue_plans
 from app.proactive.sender_job import send_proactive
 from app.utils.logging import setup_logging
 from app.utils.time import format_local_id, from_utc_iso, now_local, now_utc
@@ -200,10 +201,15 @@ async def schedule_day_proactive_jobs(app: Application) -> None:
         now_dt = now_utc()
         scheduled_count = 0
 
+        # Recover plans missed during downtime: <30 min late -> send soon, else skip (PRD §13)
+        overdue_ids = {p.id for p in await resolve_overdue_plans(store, plans, now=now_dt)}
+
         for plan in plans:
             if plan.status != "planned":
                 continue
             planned_dt = from_utc_iso(plan.planned_at)
+            if plan.id in overdue_ids:
+                planned_dt = now_dt + timedelta(seconds=5)
             if planned_dt > now_dt:
                 job_id = f"proactive_job_{plan.id}"
                 scheduler.add_job(
@@ -283,6 +289,7 @@ def run_bot(settings: Settings) -> None:
         llm_cfg=settings.config.llm,
         conv_cfg=settings.config.conversation,
         store=store,
+        crisis_resources=settings.config.safety.crisis_resources,
     )
 
     extractor = MemoryExtractor(

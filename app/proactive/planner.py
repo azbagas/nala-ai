@@ -14,9 +14,43 @@ from zoneinfo import ZoneInfo
 
 from app.config import ProactiveSection
 from app.memory.store import MemoryStore, PlanRecord
-from app.utils.time import is_quiet_hours, now_utc, parse_hhmm, to_utc_iso
+from app.proactive.checks import frequency_profile
+from app.utils.time import from_utc_iso, is_quiet_hours, now_utc, parse_hhmm, to_utc_iso
 
 log = logging.getLogger(__name__)
+
+MAX_LATE_MINUTES = 30
+
+
+async def resolve_overdue_plans(
+    store: MemoryStore,
+    plans: list[PlanRecord],
+    now: datetime | None = None,
+    max_late_minutes: int = MAX_LATE_MINUTES,
+) -> list[PlanRecord]:
+    """Handle 'planned' rows whose time already passed, e.g. after downtime (PRD §13).
+
+    Rows less than ``max_late_minutes`` late are returned so the caller can send them
+    right away; older rows are marked ``skipped`` with reason ``missed``.
+    """
+    now_dt = now or now_utc()
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+
+    send_now: list[PlanRecord] = []
+    for plan in plans:
+        if plan.status != "planned":
+            continue
+        planned_dt = from_utc_iso(plan.planned_at)
+        if planned_dt > now_dt:
+            continue
+        late = now_dt - planned_dt
+        if late <= timedelta(minutes=max_late_minutes):
+            send_now.append(plan)
+        else:
+            await store.update_plan_status(plan.id, status="skipped", skip_reason="missed")
+            log.info("proactive_plan_missed plan_id=%d late_min=%.0f", plan.id, late.total_seconds() / 60)
+    return send_now
 
 
 async def plan_day(
@@ -53,16 +87,8 @@ async def plan_day(
         return existing_plans
 
     # 2. Check frequency setting from state (PRD §4.6)
-    freq = (await store.get_state("proactive_frequency", default="normal") or "normal").lower()
-    if freq == "low":
-        effective_cap = max(1, proactive_cfg.daily_cap // 2)
-        chance_mult = 0.6
-    elif freq == "high":
-        effective_cap = proactive_cfg.daily_cap + 1
-        chance_mult = 1.2
-    else:
-        effective_cap = proactive_cfg.daily_cap
-        chance_mult = 1.0
+    freq = await store.get_state("proactive_frequency", default="normal")
+    effective_cap, chance_mult = frequency_profile(freq, proactive_cfg.daily_cap)
 
     candidates: list[tuple[str, datetime]] = []
 

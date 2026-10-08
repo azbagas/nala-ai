@@ -285,6 +285,8 @@ async def text_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if "store" in ctx.application.bot_data and chat_id:
         try:
             await _store(ctx).set_owner_chat_id(chat_id)
+            await _store(ctx).update_last_user_message_time()
+            await _store(ctx).reset_ignored_count()
         except Exception as exc:
             log.warning("failed_to_save_owner_chat_id error=%r", exc)
 

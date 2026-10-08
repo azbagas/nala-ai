@@ -198,6 +198,11 @@ class BackupSection(_Strict):
     keep_days: int = Field(14, ge=1)
 
 
+class SafetySection(_Strict):
+    # Local help resources shown when the user expresses serious distress (PRD §11.1).
+    crisis_resources: list[str] = []
+
+
 class AppConfig(_Strict):
     app: AppSection
     llm: LLMSection
@@ -206,6 +211,7 @@ class AppConfig(_Strict):
     memory: MemorySection = MemorySection()
     storage: StorageSection = StorageSection()
     backup: BackupSection = BackupSection()
+    safety: SafetySection = SafetySection()
 
 
 # ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@ def test_contains_assistant_voice():
 
 def test_sanitize_text():
     raw = "Nara: Halo apa kabar? Ada yang bisa saya bantu?"
-    cleaned = sanitize_text(raw)
+    cleaned = sanitize_text(raw, speaker_names=("Nara",))
     assert not cleaned.startswith("Nara:")
     assert "ada yang bisa saya bantu" not in cleaned.lower()
 

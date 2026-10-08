@@ -245,7 +245,9 @@ async def test_daily_life_storage(temp_store: MemoryStore):
 
 @pytest.mark.asyncio
 async def test_get_today_llm_stats(temp_store: MemoryStore):
-    today = "2026-10-07"
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     # Initially 0 stats
     stats = await temp_store.get_today_llm_stats(today)
     assert stats["total_calls"] == 0

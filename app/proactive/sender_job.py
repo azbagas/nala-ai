@@ -10,11 +10,12 @@ from __future__ import annotations
 import logging
 import random
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from telegram import Bot
+from telegram.error import Forbidden
 
 from app.config import ConversationSection, LLMSection, ProactiveSection
 from app.engine.conversation import contains_assistant_voice, is_predominantly_english, sanitize_text
@@ -26,6 +27,8 @@ from app.proactive.checks import is_in_backoff, run_presend_checks
 from app.utils.time import now_local, now_utc
 
 log = logging.getLogger(__name__)
+
+BLOCKED_PAUSE_DAYS = 30
 
 
 def find_due_thread(
@@ -252,11 +255,13 @@ async def send_proactive(
         except GeminiError:
             pass
 
-    cleaned_text = sanitize_text(raw_text)
+    persona_names = (prompt_builder.persona.name,)
+    cleaned_text = sanitize_text(raw_text, speaker_names=persona_names)
     bubbles = split_bubbles(
         cleaned_text,
         max_bubbles=conv_cfg.max_bubbles,
         max_chars=conv_cfg.max_bubble_chars,
+        speaker_names=persona_names,
     )
     if not bubbles:
         bubbles = ["Lagi senggang nih, gimana harimu?"]
@@ -270,6 +275,12 @@ async def send_proactive(
             typing_cfg=conv_cfg.typing_delay,
             simulate_typing=simulate_typing,
         )
+    except Forbidden as exc:
+        # The user blocked the bot: stop all proactive jobs for a long time (PRD §13)
+        log.error("send_proactive_bot_blocked plan_id=%d chat_id=%s error=%r -> pausing proactive", plan_id, chat_id, exc)
+        await store.set_paused_until(now_dt + timedelta(days=BLOCKED_PAUSE_DAYS))
+        await store.update_plan_status(plan_id, status="failed", skip_reason="bot_blocked")
+        return False
     except Exception as exc:
         log.error("send_proactive_telegram_error plan_id=%d chat_id=%s error=%r", plan_id, chat_id, exc)
         await store.update_plan_status(plan_id, status="failed", skip_reason=f"telegram_error: {exc}")

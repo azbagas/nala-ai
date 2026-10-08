@@ -17,8 +17,8 @@ from app.config import TypingDelay
 
 log = logging.getLogger(__name__)
 
-# Strip common AI persona prefixes e.g. "Nara: ", "Bot: ", "Aku: "
-_PREFIX_PATTERN = re.compile(r"^(?:[A-Za-z0-9_-]+|Aku|Bot|Nara)\s*:\s*", re.IGNORECASE)
+# Strip known AI speaker prefixes e.g. "Aku: ", "Bot: " (persona name is passed per call)
+_GENERIC_SPEAKERS = ("Aku", "Bot", "AI", "Assistant", "Asisten")
 _DELIMITER_PATTERN = re.compile(r"\n?\s*---\s*\n?")
 _SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?…])\s+")
 
@@ -37,10 +37,15 @@ def calculate_typing_delay(
     return max(min_seconds, min(calculated, max_seconds))
 
 
-def _clean_chunk(chunk: str) -> str:
+def _prefix_pattern(speaker_names: tuple[str, ...]) -> re.Pattern[str]:
+    names = "|".join(re.escape(n) for n in (*_GENERIC_SPEAKERS, *speaker_names) if n)
+    return re.compile(rf"^(?:{names})\s*:\s*", re.IGNORECASE)
+
+
+def _clean_chunk(chunk: str, speaker_names: tuple[str, ...] = ()) -> str:
     """Clean a single text chunk: remove quotes, prefixes, list bullets."""
     text = chunk.strip()
-    text = _PREFIX_PATTERN.sub("", text).strip()
+    text = _prefix_pattern(tuple(speaker_names)).sub("", text).strip()
     # Strip markdown list markers if model added them
     text = re.sub(r"^[*\-•]\s+", "", text)
     # Strip enclosing quotation marks
@@ -49,7 +54,12 @@ def _clean_chunk(chunk: str) -> str:
     return text
 
 
-def split_bubbles(text: str, max_bubbles: int = 3, max_chars: int = 280) -> list[str]:
+def split_bubbles(
+    text: str,
+    max_bubbles: int = 3,
+    max_chars: int = 280,
+    speaker_names: tuple[str, ...] = (),
+) -> list[str]:
     """Split model response into 1-3 short chat bubbles.
 
     Prioritizes explicit '---' delimiters from the prompt, falls back to
@@ -74,7 +84,7 @@ def split_bubbles(text: str, max_bubbles: int = 3, max_chars: int = 280) -> list
     # Clean and flatten
     bubbles: list[str] = []
     for part in parts:
-        cleaned = _clean_chunk(part)
+        cleaned = _clean_chunk(part, speaker_names)
         if not cleaned:
             continue
 

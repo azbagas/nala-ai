@@ -25,6 +25,16 @@ class PreSendResult:
     reason: str | None = None
 
 
+def frequency_profile(freq: str | None, daily_cap: int) -> tuple[int, float]:
+    """Return (effective_daily_cap, chance_multiplier) for a /frequency setting (PRD §4.6)."""
+    freq = (freq or "normal").lower()
+    if freq == "low":
+        return max(1, daily_cap // 2), 0.6
+    if freq == "high":
+        return daily_cap + 1, 1.2
+    return daily_cap, 1.0
+
+
 def is_in_backoff(ignored_count: int, backoff_threshold: int) -> bool:
     """Return True if ignored_count reached the adaptive backoff threshold."""
     return ignored_count >= backoff_threshold
@@ -69,12 +79,14 @@ async def run_presend_checks(
             return PreSendResult(can_send=False, reason="user_recently_active")
 
     # 4. Daily cap check (FR-4.4, FR-4.6)
+    freq = await store.get_state("proactive_frequency", default="normal")
+    effective_cap, _ = frequency_profile(freq, proactive_cfg.daily_cap)
     sent_count = await store.count_sent_proactive_for_date(today_date)
-    if sent_count >= proactive_cfg.daily_cap:
+    if sent_count >= effective_cap:
         log.info(
             "presend_skipped reason=daily_cap_reached sent=%d cap=%d date=%s",
             sent_count,
-            proactive_cfg.daily_cap,
+            effective_cap,
             today_date,
         )
         return PreSendResult(can_send=False, reason="daily_cap_reached")
