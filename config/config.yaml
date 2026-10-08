@@ -15,15 +15,15 @@ llm:
   utility_model: "gemini-3.5-flash-lite"   # cheap/fast model for extraction, summaries, life
   temperature_chat: 0.9
   temperature_utility: 0.2
-  max_output_tokens_chat: 300
+  max_output_tokens_chat: 120
   history_window_messages: 24
   request_timeout_seconds: 30
   max_retries: 3
 
 conversation:
   debounce_seconds: 4
-  max_bubbles: 3
-  max_bubble_chars: 280
+  max_bubbles: 2
+  max_bubble_chars: 140
   typing_delay:
     min_seconds: 1.0
     max_seconds: 6.0
