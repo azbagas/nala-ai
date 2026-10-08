@@ -102,9 +102,16 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await _store(ctx).set_state("owner_chat_id", str(chat_id))
 
     p = settings.persona
-    await update.effective_message.reply_text(
-        f"Haii! Aku {p.name} 👋 Senang bisa ngobrol sama kamu. Hari ini ada cerita apa?"
-    )
+    store = _store(ctx) if "store" in ctx.application.bot_data else None
+    user_name = await store.get_user_name() if store and hasattr(store, "get_user_name") else None
+    if user_name:
+        await update.effective_message.reply_text(
+            f"haii {user_name}! aku {p.name} 👋 ada cerita apa nih hari ini?"
+        )
+    else:
+        await update.effective_message.reply_text(
+            f"haii! aku {p.name} 👋 salam kenal yaa. btw boleh panggil kamu siapa nihh?"
+        )
 
 
 async def ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -240,6 +247,22 @@ async def reset_memory_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     await store.reset_memory()
     _engine(ctx).clear_history()
     await update.effective_message.reply_text("Semua memori dan riwayat percakapan telah dihapus bersih 🧹")
+
+
+async def set_name_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manually set or update the user's name/nickname."""
+    settings = _settings(ctx)
+    if not _is_owner(update, settings) or not update.effective_message:
+        return
+    text = update.effective_message.text or ""
+    parts = text.strip().split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await update.effective_message.reply_text("formatnya: /setname <nama kamu>\ncontoh: /setname Bagas")
+        return
+    name = parts[1].strip()
+    store = _store(ctx)
+    await store.set_user_name(name)
+    await update.effective_message.reply_text(f"okee, mulai sekarang aku panggil kamu {name} yaa! 🥰")
 
 
 async def run_nightly_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -625,6 +648,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler(["clear", "reset"], clear_history))
     app.add_handler(CommandHandler("memory", view_memory))
     app.add_handler(CommandHandler("forget", forget_fact))
+    app.add_handler(CommandHandler(["setname", "nama"], set_name_command))
     app.add_handler(CommandHandler("reset_memory", reset_memory_command))
     app.add_handler(CommandHandler(["run_nightly", "extract_memory"], run_nightly_command))
     app.add_handler(CommandHandler("status", status_command))

@@ -194,6 +194,7 @@ async def send_proactive(
     )
 
     # 4. Build prompt (§8.3 step 4)
+    user_name = await store.get_user_name() if hasattr(store, "get_user_name") else None
     system_instruction = await prompt_builder.build_system_prompt_from_store(store, dt=local_dt)
     proactive_prompt = prompt_builder.build_proactive_prompt(
         window_name=plan.window_name,
@@ -202,6 +203,7 @@ async def send_proactive(
         due_thread=due_thread_text,
         recent_proactive=recent_proactive_texts,
         recent_messages=recent_msgs_formatted,
+        user_name=user_name,
         dt=local_dt,
     )
 

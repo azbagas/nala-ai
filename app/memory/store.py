@@ -510,6 +510,40 @@ class MemoryStore:
             await db.commit()
 
     # -----------------------------------------------------------------------
+    # Dynamic User Profile / Identity
+    # -----------------------------------------------------------------------
+
+    async def get_user_name(self) -> str | None:
+        """Fetch the stored user name from state, or fallback to active identity fact."""
+        name = await self.get_state("user_name")
+        if name and name.strip():
+            return name.strip()
+        # Fallback: check active facts with category='identity'
+        facts = await self.get_active_facts()
+        for f in facts:
+            if f.category.lower() in ("identity", "name", "nama"):
+                m = re.search(r"(?:nama(?:\s+panggilan)?(?:\s+user)?)\s*:\s*([A-Za-z0-9_-]+)", f.content, re.IGNORECASE)
+                if m:
+                    return m.group(1).strip()
+        return None
+
+    async def set_user_name(self, name: str) -> None:
+        """Store the user name into state and as an active identity fact."""
+        clean_name = name.strip()
+        if not clean_name:
+            return
+        await self.set_state("user_name", clean_name)
+        # Ensure it is recorded in active facts under category 'identity'
+        facts = await self.get_active_facts()
+        existing = [f for f in facts if f.category.lower() == "identity" and "nama" in f.content.lower()]
+        content = f"Nama: {clean_name}"
+        if existing:
+            await self.supersede_fact(existing[0].id, content, category="identity")
+        else:
+            await self.add_fact(category="identity", content=content)
+        log.info("user_name_saved name=%s", clean_name)
+
+    # -----------------------------------------------------------------------
     # LLM Observability
     # -----------------------------------------------------------------------
 
@@ -574,7 +608,7 @@ class MemoryStore:
             await db.execute("DELETE FROM open_threads;")
             await db.execute("DELETE FROM summaries;")
             await db.execute("DELETE FROM messages;")
-            await db.execute("DELETE FROM state WHERE key LIKE 'last_extracted%';")
+            await db.execute("DELETE FROM state WHERE key LIKE 'last_extracted%' OR key = 'user_name';")
             await db.commit()
         log.info("memory_reset_completed")
 

@@ -186,3 +186,52 @@ async def test_conversation_engine_with_memory_store(tmp_path):
     assert await store.get_last_user_message_time() is not None
     assert await store.get_ignored_count() == 0
 
+
+def test_extract_introduced_name():
+    from app.engine.conversation import extract_introduced_name
+
+    assert extract_introduced_name("namaku Bagas") == "Bagas"
+    assert extract_introduced_name("nama aku Azhar yaa") == "Azhar"
+    assert extract_introduced_name("panggil aku Ryan") == "Ryan"
+    assert extract_introduced_name("panggil aja Budi") == "Budi"
+    assert extract_introduced_name("kenalin aku Dinda") == "Dinda"
+    assert extract_introduced_name("salam kenal, aku Bagas") == "Bagas"
+    assert extract_introduced_name("aku lagi di jalan") is None
+    assert extract_introduced_name("aku mau makan dulu ya") is None
+    assert extract_introduced_name("halo nala apa kabar") is None
+
+
+@pytest.mark.asyncio
+async def test_conversation_learns_user_name(tmp_path):
+    from app.memory.store import MemoryStore
+
+    store = MemoryStore(tmp_path / "name_test.db")
+    await store.init_db()
+
+    persona = Persona(name="Nala")
+    builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
+    mock_gemini = AsyncMock()
+    mock_gemini.generate.return_value = GeminiResult(
+        text="haii Bagas! salam kenal yaa",
+        model="gemini-test",
+        input_tokens=50,
+        output_tokens=15,
+        latency_ms=100,
+    )
+
+    engine = ConversationEngine(
+        gemini=mock_gemini,
+        prompt_builder=builder,
+        llm_cfg=LLMSection(chat_model="test", utility_model="test-lite", history_window_messages=5),
+        conv_cfg=ConversationSection(),
+        store=store,
+    )
+
+    assert await store.get_user_name() is None
+    await engine.reply("halo nala, namaku Bagas salam kenal!")
+
+    assert await store.get_user_name() == "Bagas"
+    call_args = mock_gemini.generate.call_args
+    assert "Bagas" in call_args.kwargs["system_instruction"]
+    assert "Kamu sudah tahu nama user" in call_args.kwargs["system_instruction"]
+

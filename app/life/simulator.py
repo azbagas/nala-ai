@@ -153,9 +153,23 @@ class LifeSimulator:
         # Build persona summary
         traits_str = ", ".join(p.traits) if p.traits else "ramah"
         interests_str = ", ".join(p.interests) if p.interests else "kopi, santai"
+        dislikes_str = f" Hal yang tidak disukai: {', '.join(p.dislikes)}." if p.dislikes else ""
+        life_parts: list[str] = []
+        if p.life:
+            labels = {
+                "job": "Pekerjaan",
+                "pets": "Hewan peliharaan",
+                "friends": "Teman",
+                "family": "Keluarga",
+            }
+            for k, val in p.life.items():
+                lbl = labels.get(k.lower(), k.replace("_", " ").capitalize())
+                v_str = ", ".join(str(x) for x in val) if isinstance(val, list) else str(val)
+                life_parts.append(f"{lbl}: {v_str}")
+        life_str = f" Lingkaran kehidupan: {'; '.join(life_parts)}." if life_parts else ""
         summary = (
             f"{p.name}, umur {p.age or 24}. {p.backstory.strip()} "
-            f"Sifat: {traits_str}. Minat: {interests_str}."
+            f"Sifat: {traits_str}. Minat: {interests_str}.{dislikes_str}{life_str}"
         )
 
         date_str = f"{target_date.day} {target_date.strftime('%B %Y')}"

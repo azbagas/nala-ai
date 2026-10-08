@@ -91,6 +91,34 @@ def sanitize_text(text: str, speaker_names: Sequence[str] = ()) -> str:
     return cleaned.strip()
 
 
+_INTRO_PATTERNS = [
+    re.compile(r"\b(?:nama(?:ku|\s+(?:aku|saya|gue|gw)))\s*(?:adalah|:)?\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
+    re.compile(r"\bpanggil(?:\s+(?:aku|saya|gue|gw|aja|saja))+\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
+    re.compile(r"\bkenalin[,\s]+(?:aku|gue|gw|saya|namaku)\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
+    re.compile(r"\bsalam\s+kenal[,\s]+(?:aku|saya|gue|gw|namaku)\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
+    re.compile(r"\b(?:aku|saya|gue|gw)\s+([A-Za-z]{2,20})[,\s]+salam\s+kenal\b", re.IGNORECASE),
+]
+
+_COMMON_NON_NAMES = {
+    "aja", "saja", "ya", "yaa", "dong", "dongg", "deh", "dehh", "sih", "nih", "nihh",
+    "nanti", "lagi", "tadi", "besok", "dulu", "sayang", "kak", "kakak", "bang", "mas", "mbak",
+    "mau", "bisa", "udah", "sudah", "belum", "capek", "sedih", "senang", "bingung", "suka",
+    "gak", "nggak", "tidak", "bukan", "punya", "juga", "sendiri", "siapa", "apa", "kenapa",
+    "gimana", "mana", "disini", "disana", "rumah", "kantor", "sekolah", "kampus", "kerja",
+}
+
+
+def extract_introduced_name(text: str) -> str | None:
+    """Extract user's name when they introduce themselves in conversation."""
+    for pattern in _INTRO_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            raw_name = match.group(1).strip()
+            if raw_name.lower() not in _COMMON_NON_NAMES:
+                return raw_name.capitalize()
+    return None
+
+
 class ConversationEngine:
     """Manages chat turns, history, Gemini calls, and response validation."""
 
@@ -172,6 +200,18 @@ class ConversationEngine:
         clean_user_text = user_text.strip()
         if not clean_user_text:
             return []
+
+        # Real-time name detection when user introduces themselves
+        if self.store and hasattr(self.store, "get_user_name") and hasattr(self.store, "set_user_name"):
+            try:
+                intro_name = extract_introduced_name(clean_user_text)
+                if intro_name:
+                    current_name = await self.store.get_user_name()
+                    if not current_name or current_name.lower() != intro_name.lower():
+                        log.info("user_introduced_name detected=%s", intro_name)
+                        await self.store.set_user_name(intro_name)
+            except Exception as exc:
+                log.warning("name_extraction_failed error=%r", exc)
 
         if self.store:
             try:

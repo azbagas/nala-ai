@@ -68,8 +68,10 @@ class ConversationSummarizer:
 
         # Build prompt from template
         template = self._get_template()
+        user_name = await self.store.get_user_name() if hasattr(self.store, "get_user_name") else None
+        effective_nickname = user_name or self.persona.user_nickname
         prompt = template.replace("{{persona.name}}", self.persona.name)
-        prompt = prompt.replace("{{user.nickname}}", self.persona.user_nickname)
+        prompt = prompt.replace("{{user.nickname}}", effective_nickname)
         prompt = prompt.replace("{{messages}}", self._format_messages(recent_messages))
 
         try:

@@ -26,6 +26,7 @@ def test_prompt_builder_renders_all_fields():
         dislikes=["macet"],
         speaking_style=SpeakingStyle(register="casual", emoji_level="medium", slang=["wkwk", "sih"]),
         boundaries=["tidak merendahkan"],
+        life={"job": "desainer grafis", "pets": ["Mochi (kucing)"], "friends": ["Dinda"]},
     )
 
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
@@ -50,6 +51,10 @@ def test_prompt_builder_renders_all_fields():
     assert "Suka musik indie" in rendered
     assert "Ujian besok" in rendered
     assert "Kemarin ngobrol soal liburan" in rendered
+    assert "kopi" in rendered
+    assert "macet" in rendered
+    assert "Mochi (kucing)" in rendered
+    assert "casual" in rendered
     # Ensure no unresolved {{variables}} remain
     assert "{{" not in rendered
     assert "}}" not in rendered
@@ -106,4 +111,77 @@ def test_build_proactive_prompt():
     assert format_time_elapsed_id(120) == "2 menit"
     assert format_time_elapsed_id(7200) == "2 jam"
     assert format_time_elapsed_id(86400 * 3) == "3 hari"
+
+
+def test_prompt_builder_stranger_vs_known_user():
+    persona = Persona(name="Nala", user_nickname="kamu")
+    builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
+
+    # 1. Stranger mode (user_name is None)
+    rendered_stranger = builder.build_system_prompt()
+    assert "BARU PERTAMA KALI MENGOBROL" in rendered_stranger
+    assert "BELUM TAHU siapa nama user" in rendered_stranger
+    assert "Kamu sudah tahu nama user" not in rendered_stranger
+    assert "{{" not in rendered_stranger
+    assert "}}" not in rendered_stranger
+
+    # 2. Known user mode (user_name provided)
+    rendered_known = builder.build_system_prompt(user_name="Bagas")
+    assert "Kamu sudah tahu nama user" in rendered_known
+    assert "Bagas" in rendered_known
+    assert "BARU PERTAMA KALI MENGOBROL" not in rendered_known
+    assert "{{" not in rendered_known
+    assert "}}" not in rendered_known
+
+
+def test_prompt_builder_emoji_levels():
+    p_low = Persona(name="Nala", speaking_style=SpeakingStyle(emoji_level="low"))
+    b_low = PromptBuilder(PROMPTS_DIR, p_low, WIB)
+    rendered_low = b_low.build_system_prompt()
+    assert "level LOW" in rendered_low
+    assert "Sangat jarang pakai emoji" in rendered_low
+
+    p_med = Persona(name="Nala", speaking_style=SpeakingStyle(emoji_level="medium"))
+    b_med = PromptBuilder(PROMPTS_DIR, p_med, WIB)
+    rendered_med = b_med.build_system_prompt()
+    assert "level MEDIUM" in rendered_med
+    assert "Gunakan emoji secukupnya" in rendered_med
+
+    p_high = Persona(name="Nala", speaking_style=SpeakingStyle(emoji_level="high"))
+    b_high = PromptBuilder(PROMPTS_DIR, p_high, WIB)
+    rendered_high = b_high.build_system_prompt()
+    assert "level HIGH" in rendered_high
+    assert "Sering dan ekspresif menggunakan emoji" in rendered_high
+
+
+def test_prompt_builder_life_and_preferences():
+    from app.engine.prompt_builder import _format_life
+
+    # 1. Format life helper
+    assert _format_life(None) == "(tidak ada catatan kehidupan khusus)"
+    assert _format_life({}) == "(tidak ada catatan kehidupan khusus)"
+
+    life_data = {
+        "job": "freelance designer",
+        "pets": ["Mochi (kucing)"],
+        "friends": ["Dinda", "Raka"],
+        "custom_key": "Nilai kustom",
+    }
+    formatted = _format_life(life_data)
+    assert "- Pekerjaan: freelance designer" in formatted
+    assert "- Hewan peliharaan: Mochi (kucing)" in formatted
+    assert "- Teman/Sahabat: Dinda, Raka" in formatted
+    assert "- Custom key: Nilai kustom" in formatted
+
+    # 2. Rendering in system prompt with empty fields
+    p_empty = Persona(name="Nala")
+    b_empty = PromptBuilder(PROMPTS_DIR, p_empty, WIB)
+    rendered = b_empty.build_system_prompt()
+    assert "(tidak ada catatan minat khusus)" in rendered
+    assert "(tidak ada catatan hal yang tidak disukai)" in rendered
+    assert "(tidak ada catatan kehidupan khusus)" in rendered
+    assert "casual" in rendered
+    assert "{{" not in rendered
+    assert "}}" not in rendered
+
 

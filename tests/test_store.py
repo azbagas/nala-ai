@@ -282,4 +282,20 @@ async def test_get_today_llm_stats(temp_store: MemoryStore):
     assert stats["success_rate"] == 0.5
 
 
+@pytest.mark.asyncio
+async def test_dynamic_user_name(temp_store: MemoryStore):
+    assert await temp_store.get_user_name() is None
 
+    await temp_store.set_user_name("Bagas")
+    assert await temp_store.get_user_name() == "Bagas"
+
+    facts = await temp_store.get_active_facts()
+    identity_facts = [f for f in facts if f.category == "identity"]
+    assert len(identity_facts) == 1
+    assert "Bagas" in identity_facts[0].content
+
+    await temp_store.set_user_name("Azhar")
+    assert await temp_store.get_user_name() == "Azhar"
+
+    await temp_store.reset_memory()
+    assert await temp_store.get_user_name() is None

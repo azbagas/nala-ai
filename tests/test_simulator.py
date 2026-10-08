@@ -228,3 +228,32 @@ async def test_prompt_builder_integrates_daily_life(
     assert "Lagi menggambar ilustrasi poster" in rendered
     assert "Kopi susu tadi enak banget" in rendered
     assert "semangat" in rendered
+
+
+def test_simulator_render_prompt_includes_life_and_dislikes(persona, prompt_dir):
+    persona.dislikes = ["macet", "kopi manis"]
+    persona.life = {
+        "job": "freelance designer",
+        "pets": ["Mochi (kucing oren)"],
+        "friends": ["Dinda"],
+    }
+    sim = LifeSimulator(
+        gemini=MagicMock(),
+        store=MagicMock(),
+        persona=persona,
+        prompts_dir=prompt_dir,
+        llm_cfg=LLMSection(chat_model="test", utility_model="test-lite"),
+        tz=WIB,
+    )
+    # Write a prompt template that prints persona.summary
+    (prompt_dir / "daily_life.id.md").write_text("Summary: {{persona.summary}}", encoding="utf-8")
+    rendered = sim._render_prompt(
+        target_date=date(2026, 10, 7),
+        day_name="Rabu",
+        yesterday_mood="senang",
+        recent_notes="santai",
+    )
+    assert "macet" in rendered
+    assert "Mochi (kucing oren)" in rendered
+    assert "freelance designer" in rendered
+    assert "Dinda" in rendered
