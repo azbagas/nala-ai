@@ -56,7 +56,7 @@ def mock_settings():
 
     )
 
-    persona = Persona(name="Nara", user_nickname="kamu")
+    persona = Persona(name="Nala", user_nickname="kamu")
     from pathlib import Path
     from app.config import Secrets
     return Settings(
@@ -139,7 +139,7 @@ async def test_status_command_with_llm_stats(mock_settings, temp_store):
     update, ctx = create_mock_update_and_ctx(mock_settings, temp_store, args=[])
     await status_command(update, ctx)
     text = update.effective_message.reply_text.call_args[0][0]
-    assert "Status Proaktif Nara" in text
+    assert "Status Proaktif Nala" in text
     assert "Statistik Model & Biaya Hari Ini" in text
     assert "Total panggilan LLM" in text
 

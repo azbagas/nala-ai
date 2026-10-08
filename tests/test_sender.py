@@ -52,8 +52,8 @@ def test_split_bubbles_max_bubbles_cap():
 
 
 def test_split_bubbles_clean_artifacts():
-    raw = 'Nara: "Hai, lagi apa?"'
-    bubbles = split_bubbles(raw, max_bubbles=3, max_chars=280, speaker_names=("Nara",))
+    raw = 'Nala: "Hai, lagi apa?"'
+    bubbles = split_bubbles(raw, max_bubbles=3, max_chars=280, speaker_names=("Nala",))
     assert bubbles == ["Hai, lagi apa?"]
 
     # Only known speaker labels are stripped, not any word before a colon

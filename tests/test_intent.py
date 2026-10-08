@@ -20,7 +20,7 @@ def test_detect_sleep_intent():
     # Wake date should be tomorrow morning
     assert res1.pause_until.date() > now.date() or res1.pause_until.hour >= 7
 
-    res2 = detect_natural_control_intent("good night Nara! bobo dulu ya", tz=WIB, now=now)
+    res2 = detect_natural_control_intent("good night Nala! bobo dulu ya", tz=WIB, now=now)
     assert res2.is_pause is True
     assert res2.reason == "sleep"
 
@@ -65,7 +65,7 @@ def test_detect_resume_intent():
 def test_no_intent_on_normal_chat():
     now = datetime(2026, 10, 7, 10, 0, 0, tzinfo=WIB)
 
-    res = detect_natural_control_intent("halo Nara, lagi ngapain nih?", tz=WIB, now=now)
+    res = detect_natural_control_intent("halo Nala, lagi ngapain nih?", tz=WIB, now=now)
     assert res.is_pause is False
     assert res.is_resume is False
     assert res.pause_until is None

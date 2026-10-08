@@ -146,7 +146,7 @@ Legend: ✅ done, ⚠️ partial, ❌ missing
 - Handlers use `from datetime import ...` and imports inside function bodies in a few places (minor style).
 - `gemini_client.py` uses `Any` in a type hint without importing it. It works only because of `from __future__ import annotations`.
 - `main.py`: `run_backup_job` annotates `Path` without importing it (same reason).
-- The persona name "Nara" is hard-coded in `extractor._format_messages` and in `sanitize_text`. Other personas will break.
+- The persona name "Nala" is hard-coded in `extractor._format_messages` and in `sanitize_text`. Other personas will break.
 - `except (GeminiError, Exception)` is redundant in the extractor.
 - Shared in-memory `_history` duplicates DB history.
 - The model names in `config.yaml` could not be verified. Run `python -m app.main --check`.
@@ -182,7 +182,7 @@ Legend: ✅ done, ⚠️ partial, ❌ missing
 13. FR-1.7, FR-1.8, FR-2.5, FR-3.8, FR-4.12, FR-6.3 and FR-6.4 (all P2) are not implemented. This is acceptable for v1.
 14. Language detection is weak (fixed English phrase list).
 15. Question-quota and guilt-trip regeneration checks are missing.
-16. Hard-coded "Nara" in extractor and sanitizer.
+16. Hard-coded "Nala" in extractor and sanitizer.
 17. Database file permissions are not restricted (NFR-6).
 18. `README` and PRD default model names may drift. Verify with `--check`.
 19. The `.env` file is present in the repo folder. It is git-ignored, so this is fine. Make sure it has never been committed (`git log -- .env`).

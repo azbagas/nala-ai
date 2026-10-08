@@ -113,7 +113,7 @@ class MemoryExtractor:
     def _format_messages(self, messages: list[MessageRecord]) -> str:
         lines: list[str] = []
         for m in messages:
-            speaker = "User" if m.role == "user" else "Nara"
+            speaker = "User" if m.role == "user" else "Nala"
             lines.append(f"{speaker}: {m.content}")
         return "\n".join(lines)
 

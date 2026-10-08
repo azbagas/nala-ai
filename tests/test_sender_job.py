@@ -50,7 +50,7 @@ def prompt_builder(tmp_path):
     prompts_dir.mkdir()
     (prompts_dir / "system_persona.id.md").write_text("Kamu {{persona.name}}.", encoding="utf-8")
     (prompts_dir / "proactive.id.md").write_text("Sapa {{user.nickname}}.", encoding="utf-8")
-    persona = Persona(name="Nara", user_nickname="kamu")
+    persona = Persona(name="Nala", user_nickname="kamu")
     return PromptBuilder(prompts_dir, persona, WIB)
 
 

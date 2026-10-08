@@ -26,7 +26,7 @@ async def test_summarize_day(tmp_path):
 
     mock_gemini = AsyncMock()
     mock_gemini.generate.return_value = GeminiResult(
-        text="User merasa lelah setelah bekerja seharian. Nara mengingatkan untuk istirahat dan minum air.",
+        text="User merasa lelah setelah bekerja seharian. Nala mengingatkan untuk istirahat dan minum air.",
         model="gemini-test",
         input_tokens=100,
         output_tokens=30,
@@ -37,7 +37,7 @@ async def test_summarize_day(tmp_path):
         gemini=mock_gemini,
         store=store,
         prompts_dir=PROMPTS_DIR,
-        persona=Persona(name="Nara"),
+        persona=Persona(name="Nala"),
         llm_cfg=LLMSection(chat_model="test", utility_model="test-lite"),
         tz=WIB,
     )
@@ -80,7 +80,7 @@ async def test_check_and_create_rolling_summary(tmp_path):
         gemini=mock_gemini,
         store=store,
         prompts_dir=PROMPTS_DIR,
-        persona=Persona(name="Nara"),
+        persona=Persona(name="Nala"),
         llm_cfg=LLMSection(chat_model="test", utility_model="test-lite"),
         tz=WIB,
     )

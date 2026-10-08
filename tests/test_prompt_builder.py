@@ -16,7 +16,7 @@ WIB = ZoneInfo("Asia/Jakarta")
 
 def test_prompt_builder_renders_all_fields():
     persona = Persona(
-        name="Nara",
+        name="Nala",
         age=24,
         user_nickname="kamu",
         pronouns=Pronouns(self="aku", you="kamu"),
@@ -40,7 +40,7 @@ def test_prompt_builder_renders_all_fields():
         latest_summary="Kemarin ngobrol soal liburan",
     )
 
-    assert "Nara" in rendered
+    assert "Nala" in rendered
     assert "24" in rendered
     assert "14:30" in rendered
     assert "Selasa" in rendered
@@ -56,15 +56,15 @@ def test_prompt_builder_renders_all_fields():
 
 
 def test_prompt_builder_set_persona():
-    p1 = Persona(name="Nara", traits=["ceria"])
+    p1 = Persona(name="Nala", traits=["ceria"])
     p2 = Persona(name="Maya", traits=["kalem"])
 
     builder = PromptBuilder(PROMPTS_DIR, p1, WIB)
-    assert "Nara" in builder.build_system_prompt()
+    assert "Nala" in builder.build_system_prompt()
 
     builder.set_persona(p2)
     assert "Maya" in builder.build_system_prompt()
-    assert "Nara" not in builder.build_system_prompt()
+    assert "Nala" not in builder.build_system_prompt()
 
 
 def test_prompt_builder_missing_template(tmp_path):
@@ -77,7 +77,7 @@ def test_prompt_builder_missing_template(tmp_path):
 def test_build_proactive_prompt():
     from app.engine.prompt_builder import format_time_elapsed_id
 
-    persona = Persona(name="Nara", user_nickname="Bagas")
+    persona = Persona(name="Nala", user_nickname="Bagas")
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
     dt = datetime(2026, 10, 7, 7, 15, tzinfo=WIB)
 
@@ -87,7 +87,7 @@ def test_build_proactive_prompt():
         time_since_last_chat="12 jam",
         due_thread="Presentasi project besok",
         recent_proactive=["Pagi! Udah bangun belum?"],
-        recent_messages=["User: Halo", "Nara: Hai juga"],
+        recent_messages=["User: Halo", "Nala: Hai juga"],
         dt=dt,
     )
 

@@ -14,14 +14,14 @@ async def test_debouncer_single_message():
         flushed.append((chat_id, user_id, text))
 
     debouncer = MessageDebouncer(debounce_seconds=0.05, on_flush=on_flush)
-    await debouncer.add_message(user_id=1, chat_id=10, text="Halo Nara")
+    await debouncer.add_message(user_id=1, chat_id=10, text="Halo Nala")
 
     # Before delay expires, nothing is flushed yet
     assert len(flushed) == 0
 
     await asyncio.sleep(0.08)
     assert len(flushed) == 1
-    assert flushed[0] == (10, 1, "Halo Nara")
+    assert flushed[0] == (10, 1, "Halo Nala")
 
 
 @pytest.mark.asyncio

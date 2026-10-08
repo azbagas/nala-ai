@@ -15,7 +15,7 @@ async def temp_store(tmp_path):
 
 @pytest.mark.asyncio
 async def test_message_persistence(temp_store: MemoryStore):
-    msg_id1 = await temp_store.save_message(role="user", content="Halo Nara")
+    msg_id1 = await temp_store.save_message(role="user", content="Halo Nala")
     msg_id2 = await temp_store.save_message(role="bot", content="Hai juga!")
 
     assert msg_id1 > 0
@@ -24,7 +24,7 @@ async def test_message_persistence(temp_store: MemoryStore):
     messages = await temp_store.get_recent_messages(limit=10)
     assert len(messages) == 2
     assert messages[0].role == "user"
-    assert messages[0].content == "Halo Nara"
+    assert messages[0].content == "Halo Nala"
     assert messages[1].role == "bot"
     assert messages[1].content == "Hai juga!"
 

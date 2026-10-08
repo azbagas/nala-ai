@@ -78,7 +78,7 @@ def sanitize_text(text: str, speaker_names: Sequence[str] = ()) -> str:
     """Strip speaker prefixes, markdown headers and customer-service help offers."""
     cleaned = text
     names = [re.escape(n) for n in (*_GENERIC_SPEAKERS, *speaker_names) if n]
-    # Remove leading speaker prefix like "Nara: " (only known names, not any word before a colon)
+    # Remove leading speaker prefix like "Nala: " (only known names, not any word before a colon)
     cleaned = re.sub(rf"^(?:{'|'.join(names)})\s*:\s*", "", cleaned, flags=re.IGNORECASE)
     # Remove markdown headers like "### " or "## "
     cleaned = re.sub(r"^#{1,6}\s+", "", cleaned, flags=re.MULTILINE)

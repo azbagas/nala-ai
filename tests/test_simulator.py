@@ -31,7 +31,7 @@ async def temp_store(tmp_path):
 @pytest.fixture
 def persona():
     return Persona(
-        name="Nara",
+        name="Nala",
         age=24,
         backstory="Desainer freelance di Jakarta bareng kucing Mochi.",
         traits=["ceria", "perhatian"],

@@ -43,7 +43,7 @@ def proactive_cfg() -> ProactiveSection:
 
 
 def _engine(store, gemini, resources=()):
-    builder = PromptBuilder(ROOT / "prompts", Persona(name="Nara"), WIB)
+    builder = PromptBuilder(ROOT / "prompts", Persona(name="Nala"), WIB)
     return ConversationEngine(
         gemini=gemini,
         prompt_builder=builder,
@@ -59,11 +59,11 @@ def _engine(store, gemini, resources=()):
 async def test_user_message_saved_when_gemini_fails(store):
     gemini = AsyncMock()
     gemini.generate.side_effect = GeminiError("down")
-    bubbles = await _engine(store, gemini).reply("Halo Nara")
+    bubbles = await _engine(store, gemini).reply("Halo Nala")
 
     assert bubbles == [FALLBACK_REPLY]
     msgs = await store.get_recent_messages()
-    assert [(m.role, m.content) for m in msgs] == [("user", "Halo Nara")]
+    assert [(m.role, m.content) for m in msgs] == [("user", "Halo Nala")]
     assert await store.get_last_user_message_time() is not None
 
 
@@ -126,7 +126,7 @@ async def test_engine_uses_supportive_prompt_on_distress(store):
 async def test_forbidden_pauses_proactive(store, proactive_cfg):
     gemini = AsyncMock()
     gemini.generate.return_value = GeminiResult("Pagi! Lagi apa nih?", "m", 1, 1, 1)
-    builder = PromptBuilder(ROOT / "prompts", Persona(name="Nara"), WIB)
+    builder = PromptBuilder(ROOT / "prompts", Persona(name="Nala"), WIB)
     bot = MagicMock()
     bot.send_chat_action = AsyncMock()
     bot.send_message = AsyncMock(side_effect=Forbidden("Forbidden: bot was blocked by the user"))
@@ -179,7 +179,7 @@ async def test_presend_cap_uses_frequency(store, proactive_cfg):
 # Issue 7: sanitizer
 def test_sanitize_keeps_normal_colon_text_and_honest_ai():
     assert sanitize_text("Catatan: besok libur ya") == "Catatan: besok libur ya"
-    assert sanitize_text("Nara: halo!", speaker_names=("Nara",)) == "halo!"
+    assert sanitize_text("Nala: halo!", speaker_names=("Nala",)) == "halo!"
     honest = "Iya, sebagai AI aku memang bukan manusia, tapi aku peduli sama kamu."
     assert sanitize_text(honest) == honest
     assert sanitize_text("Seru banget! Ada yang bisa saya bantu?") == "Seru banget!"

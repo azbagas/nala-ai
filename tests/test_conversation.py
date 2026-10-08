@@ -30,9 +30,9 @@ def test_contains_assistant_voice():
 
 
 def test_sanitize_text():
-    raw = "Nara: Halo apa kabar? Ada yang bisa saya bantu?"
-    cleaned = sanitize_text(raw, speaker_names=("Nara",))
-    assert not cleaned.startswith("Nara:")
+    raw = "Nala: Halo apa kabar? Ada yang bisa saya bantu?"
+    cleaned = sanitize_text(raw, speaker_names=("Nala",))
+    assert not cleaned.startswith("Nala:")
     assert "ada yang bisa saya bantu" not in cleaned.lower()
 
     header_raw = "### Catatan\nHari ini cerah banget!"
@@ -41,7 +41,7 @@ def test_sanitize_text():
 
 @pytest.fixture
 def test_engine():
-    persona = Persona(name="Nara", traits=["ceria"])
+    persona = Persona(name="Nala", traits=["ceria"])
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
     llm_cfg = LLMSection(
         chat_model="gemini-test",
@@ -76,7 +76,7 @@ async def test_conversation_engine_reply_success(test_engine):
         latency_ms=250,
     )
 
-    bubbles = await engine.reply("Halo Nara")
+    bubbles = await engine.reply("Halo Nala")
     assert len(bubbles) == 2
     assert bubbles[0] == "Haii! Lagi santai nih di kamar."
     assert bubbles[1] == "Kamu sendiri lagi apa?"
@@ -84,7 +84,7 @@ async def test_conversation_engine_reply_success(test_engine):
     history = engine.get_history()
     assert len(history) == 2
     assert history[0].role == "user"
-    assert history[0].content == "Halo Nara"
+    assert history[0].content == "Halo Nala"
     assert history[1].role == "model"
 
 
@@ -109,7 +109,7 @@ async def test_conversation_engine_quality_retry(test_engine):
         ),
     ]
 
-    bubbles = await engine.reply("Hai Nara")
+    bubbles = await engine.reply("Hai Nala")
     assert mock_gemini.generate.call_count == 2
     assert "santai" in bubbles[0]
 
@@ -149,7 +149,7 @@ async def test_conversation_engine_with_memory_store(tmp_path):
     await store.init_db()
     await store.add_fact("work", "Software Engineer di Bandung")
 
-    persona = Persona(name="Nara")
+    persona = Persona(name="Nala")
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
     mock_gemini = AsyncMock()
     mock_gemini.generate.return_value = GeminiResult(

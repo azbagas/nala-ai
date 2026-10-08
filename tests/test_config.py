@@ -39,7 +39,7 @@ def test_owner_id_empty_is_none(monkeypatch):
 
 def test_shipped_persona_loads():
     p = load_persona(ROOT / "config" / "persona.yaml")
-    assert p.name == "Nara"
+    assert p.name == "Nala"
     assert p.pronouns.self_ == "aku"
     assert p.traits
 
