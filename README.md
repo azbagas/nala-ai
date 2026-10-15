@@ -417,6 +417,7 @@ nala-ai/
 ├── .env.example             # Template for required environment variables
 ├── docker-compose.yml       # Production Docker Compose orchestration
 ├── Dockerfile               # Python 3.12 slim container build
+├── CHANGELOG.md             # Keep a Changelog documentation
 ├── LICENSE                  # MIT Open-Source License
 └── README.md                # Project documentation
 ```
