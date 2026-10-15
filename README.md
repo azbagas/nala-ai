@@ -411,8 +411,7 @@ nala-ai/
 │   ├── companion.service    # Production systemd service unit
 │   └── restore.py           # Disaster recovery CLI restore script
 ├── docs/                    # Technical documentation
-│   ├── PRD_AI_Companion_Bot.md # Comprehensive engineering & PRD specification
-│   └── VALIDATION_REPORT.md    # Product validation report & test coverage
+│   └── PRD_AI_Companion_Bot.md # Comprehensive engineering & PRD specification
 ├── prompts/                 # Prompt templates (*.id.md)
 ├── tests/                   # Pytest test suite (113 tests)
 ├── .env.example             # Template for required environment variables
