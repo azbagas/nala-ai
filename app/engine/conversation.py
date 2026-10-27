@@ -95,6 +95,11 @@ _INTRO_PATTERNS = [
     re.compile(r"\bkenalin[,\s]+(?:aku|gue|gw|saya|namaku)\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
     re.compile(r"\bsalam\s+kenal[,\s]+(?:aku|saya|gue|gw|namaku)\s+([A-Za-z]{2,20})\b", re.IGNORECASE),
     re.compile(r"\b(?:aku|saya|gue|gw)\s+([A-Za-z]{2,20})[,\s]+salam\s+kenal\b", re.IGNORECASE),
+    # Direct short introductions: "Aku Bagas", "Halo, aku Bagas ya", "Hai saya Ryan"
+    re.compile(
+        r"^(?:(?:halo|hai|hey|helo)[,\s]+)?(?:aku|saya|gue|gw)\s+([A-Za-z]{2,20})(?:[,\s]+(?:ya|yaa|nih|dong))?[\.!]?$",
+        re.IGNORECASE,
+    ),
 ]
 
 _COMMON_NON_NAMES = {
@@ -103,6 +108,8 @@ _COMMON_NON_NAMES = {
     "mau", "bisa", "udah", "sudah", "belum", "capek", "sedih", "senang", "bingung", "suka",
     "gak", "nggak", "tidak", "bukan", "punya", "juga", "sendiri", "siapa", "apa", "kenapa",
     "gimana", "mana", "disini", "disana", "rumah", "kantor", "sekolah", "kampus", "kerja",
+    "tidur", "makan", "minum", "pulang", "pergi", "jalan", "otw", "online", "offline",
+    "tau", "tahu", "paham", "ngerti", "oke", "ok", "siap", "baik",
 }
 
 

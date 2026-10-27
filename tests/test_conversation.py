@@ -195,9 +195,15 @@ def test_extract_introduced_name():
     assert extract_introduced_name("panggil aku Ryan") == "Ryan"
     assert extract_introduced_name("panggil aja Budi") == "Budi"
     assert extract_introduced_name("kenalin aku Dinda") == "Dinda"
-    assert extract_introduced_name("salam kenal, aku Bagas") == "Bagas"
+    assert extract_introduced_name("Aku bagas") == "Bagas"
+    assert extract_introduced_name("halo aku bagas") == "Bagas"
+    assert extract_introduced_name("Hai, aku Azhar yaa") == "Azhar"
+    assert extract_introduced_name("gue Ryan") == "Ryan"
+    assert extract_introduced_name("saya Budi") == "Budi"
     assert extract_introduced_name("aku lagi di jalan") is None
     assert extract_introduced_name("aku mau makan dulu ya") is None
+    assert extract_introduced_name("aku capek") is None
+    assert extract_introduced_name("aku mau tidur") is None
     assert extract_introduced_name("halo nala apa kabar") is None
 
 
