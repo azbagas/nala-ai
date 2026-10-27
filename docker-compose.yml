@@ -2,7 +2,7 @@ services:
   companion:
     build: .
     container_name: companion-bot
-    restart: unless-stopped        # NFR-1: auto-restart on crash
+    restart: unless-stopped        # auto-restart on crash
     env_file: .env
     environment:
       TZ: Asia/Jakarta

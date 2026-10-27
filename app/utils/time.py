@@ -1,4 +1,4 @@
-"""Time helpers (PRD NFR-10): store UTC, schedule/display in Asia/Jakarta."""
+"""Time helpers: store UTC, schedule/display in Asia/Jakarta."""
 
 from __future__ import annotations
 

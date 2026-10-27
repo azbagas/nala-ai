@@ -44,7 +44,7 @@ async def run_nightly_job(
     expire_days: int,
     rolling_days: int,
 ) -> None:
-    """Scheduled nightly job: extracts facts, expires stale threads, writes summaries (PRD §8.4)."""
+    """Scheduled nightly job: extracts facts, expires stale threads, writes summaries."""
     log.info("nightly_memory_job_started")
     try:
         ext_summary = await extractor.extract_new_memories()
@@ -74,7 +74,7 @@ async def run_nightly_job(
 
 
 async def run_backup_job(db_path: Path, backup_dir: Path, keep_days: int) -> None:
-    """Scheduled automated SQLite backup job (PRD §8.4, Milestone M6)."""
+    """Scheduled automated SQLite backup job."""
     log.info("daily_backup_job_started")
     try:
         from app.memory.backup import perform_backup
@@ -165,7 +165,7 @@ async def run_checks(settings: Settings) -> bool:
 
 
 async def execute_proactive_job(app: Application, plan_id: int) -> None:
-    """Triggered by APScheduler when a proactive time arrives (PRD §8.3)."""
+    """Triggered by APScheduler when a proactive time arrives."""
     settings: Settings = app.bot_data["settings"]
     store: MemoryStore = app.bot_data["store"]
     gemini: GeminiClient = app.bot_data["gemini"]
@@ -191,7 +191,7 @@ async def execute_proactive_job(app: Application, plan_id: int) -> None:
 
 
 async def schedule_day_proactive_jobs(app: Application) -> None:
-    """Generate or retrieve today's plan and register future jobs in APScheduler (PRD §8.2)."""
+    """Generate or retrieve today's plan and register future jobs in APScheduler."""
     settings: Settings = app.bot_data["settings"]
     store: MemoryStore = app.bot_data["store"]
     scheduler: AsyncIOScheduler = app.bot_data["scheduler"]
@@ -201,7 +201,7 @@ async def schedule_day_proactive_jobs(app: Application) -> None:
         now_dt = now_utc()
         scheduled_count = 0
 
-        # Recover plans missed during downtime: <30 min late -> send soon, else skip (PRD §13)
+        # Recover plans missed during downtime: <30 min late -> send soon, else skip
         overdue_ids = {p.id for p in await resolve_overdue_plans(store, plans, now=now_dt)}
 
         for plan in plans:
@@ -238,7 +238,7 @@ async def schedule_day_proactive_jobs(app: Application) -> None:
 
 
 async def run_morning_life_job(simulator: LifeSimulator) -> None:
-    """Generate her daily life schedule and mood in the morning (PRD §8.5)."""
+    """Generate her daily life schedule and mood in the morning."""
     log.info("morning_life_job_started")
     try:
         rec = await simulator.generate_daily_life()
@@ -253,7 +253,7 @@ async def _post_init(app: Application) -> None:
     store: MemoryStore = app.bot_data["store"]
     await store.init_db()
 
-    # Ensure today's simulated life is ready (PRD §8.5)
+    # Ensure today's simulated life is ready
     life_simulator: LifeSimulator | None = app.bot_data.get("life_simulator")
     if life_simulator:
         try:
@@ -342,7 +342,7 @@ def run_bot(settings: Settings) -> None:
         replace_existing=True,
     )
 
-    # Morning life generation runs at 05:30 WIB every day (PRD §8.5)
+    # Morning life generation runs at 05:30 WIB every day
     life_hh, life_mm = settings.config.memory.daily_life_job_time.split(":")
     scheduler.add_job(
         run_morning_life_job,
@@ -354,7 +354,7 @@ def run_bot(settings: Settings) -> None:
         replace_existing=True,
     )
 
-    # Proactive daily planner runs at 00:05 WIB every day (PRD §8.2)
+    # Proactive daily planner runs at 00:05 WIB every day
     scheduler.add_job(
         schedule_day_proactive_jobs,
         trigger="cron",
@@ -365,7 +365,7 @@ def run_bot(settings: Settings) -> None:
         replace_existing=True,
     )
 
-    # Daily SQLite backup runs at 03:00 WIB every day (PRD §8.4, Milestone M6)
+    # Daily SQLite backup runs at 03:00 WIB every day
     bk_hh, bk_mm = settings.config.backup.daily_time.split(":")
     scheduler.add_job(
         run_backup_job,

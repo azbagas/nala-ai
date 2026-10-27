@@ -1,4 +1,4 @@
-"""Automated SQLite backup and rotation (PRD §8.4, §15 Milestone M6).
+"""Automated SQLite backup and rotation.
 
 Performs safe online SQLite backups using the sqlite3 backup API (WAL-safe),
 prunes backups older than keep_days, and verifies backup integrity.

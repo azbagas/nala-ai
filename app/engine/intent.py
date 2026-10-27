@@ -1,4 +1,4 @@
-"""Natural-language intent detection for pause, sleep, and resume (PRD §4.6, §8.1).
+"""Natural-language intent detection for pause, sleep, and resume.
 
 Detects conversational control statements from the user (e.g., "mau tidur",
 "jangan chat dulu hari ini", "lagi sibuk banget", "udah bangun nih") and

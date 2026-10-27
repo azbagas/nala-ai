@@ -11,8 +11,6 @@
 
 A single-user, proactive AI companion bot for Telegram speaking natural, casual Indonesian. Powered by Google Gemini and SQLite, she doesn't just passively wait for you to message her—she plans her own day, lives her own routine, remembers your life details, and texts you first.
 
-See [docs/PRD_AI_Companion_Bot.md](docs/PRD_AI_Companion_Bot.md) for the complete engineering and product specifications.
-
 ---
 
 ## Table of Contents
@@ -410,8 +408,6 @@ nala-ai/
 ├── deploy/                  # Deployment & operational tooling
 │   ├── companion.service    # Production systemd service unit
 │   └── restore.py           # Disaster recovery CLI restore script
-├── docs/                    # Technical documentation
-│   └── PRD_AI_Companion_Bot.md # Comprehensive engineering & PRD specification
 ├── prompts/                 # Prompt templates (*.id.md)
 ├── tests/                   # Pytest test suite (113 tests)
 ├── .env.example             # Template for required environment variables

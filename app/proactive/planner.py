@@ -1,4 +1,4 @@
-"""Daily proactive planner (PRD §4.4, §8.2).
+"""Daily proactive planner.
 
 Creates the day's proactive send times based on configurable time windows,
 probabilities, quiet hours, and daily cap. Persisted idempotently in SQLite
@@ -28,7 +28,7 @@ async def resolve_overdue_plans(
     now: datetime | None = None,
     max_late_minutes: int = MAX_LATE_MINUTES,
 ) -> list[PlanRecord]:
-    """Handle 'planned' rows whose time already passed, e.g. after downtime (PRD §13).
+    """Handle 'planned' rows whose time already passed, e.g. after downtime.
 
     Rows less than ``max_late_minutes`` late are returned so the caller can send them
     right away; older rows are marked ``skipped`` with reason ``missed``.
@@ -64,7 +64,7 @@ async def plan_day(
     """Generate or retrieve the proactive schedule for a given date.
 
     If a plan for the date already exists in the database, it is returned
-    as-is without re-rolling (idempotency, FR-4.5).
+    as-is without re-rolling (idempotency).
     """
     _rng = rng or random.Random()
     now_dt = now or now_utc()
@@ -86,7 +86,7 @@ async def plan_day(
         )
         return existing_plans
 
-    # 2. Check frequency setting from state (PRD §4.6)
+    # 2. Check frequency setting from state
     freq = await store.get_state("proactive_frequency", default="normal")
     effective_cap, chance_mult = frequency_profile(freq, proactive_cfg.daily_cap)
 
@@ -122,13 +122,13 @@ async def plan_day(
         offset = _rng.randint(0, span_seconds)
         planned_dt = earliest + timedelta(seconds=offset)
 
-        # Check quiet hours (FR-4.4)
+        # Check quiet hours
         if is_quiet_hours(planned_dt, proactive_cfg.quiet_hours.start, proactive_cfg.quiet_hours.end):
             continue
 
         candidates.append((window.name, planned_dt))
 
-    # 3. Roll for bonus spontaneous message (FR-4.9)
+    # 3. Roll for bonus spontaneous message
     eff_bonus_chance = min(1.0, proactive_cfg.bonus.chance * chance_mult)
     if proactive_cfg.bonus.max_per_day > 0 and _rng.random() <= eff_bonus_chance:
         bonus_start = parse_hhmm(proactive_cfg.bonus.awake_start)
@@ -150,7 +150,7 @@ async def plan_day(
                 if not is_quiet_hours(b_planned_dt, proactive_cfg.quiet_hours.start, proactive_cfg.quiet_hours.end):
                     candidates.append(("bonus", b_planned_dt))
 
-    # 4. Enforce daily cap (FR-4.4, §8.2)
+    # 4. Enforce daily cap
     # Sort chronologically
     candidates.sort(key=lambda c: c[1])
     if len(candidates) > effective_cap:

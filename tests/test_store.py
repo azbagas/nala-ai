@@ -38,7 +38,7 @@ async def test_facts_and_supersede(temp_store: MemoryStore):
     assert active_facts[0].id == f1_id
     assert active_facts[0].content == "Bekerja di Startup A"
 
-    # 2. Supersede fact (FR-3.9)
+    # 2. Supersede fact
     f2_id = await temp_store.supersede_fact(old_fact_id=f1_id, new_content="Pindah kerja ke Tech Corp B")
     active_facts = await temp_store.get_active_facts()
     assert len(active_facts) == 1

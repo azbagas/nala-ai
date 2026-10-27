@@ -1,4 +1,4 @@
-"""Message debouncer (PRD §4.1 FR-1.6).
+"""Message debouncer.
 
 Buffers rapid consecutive user messages within a configurable debounce window
 (e.g., 3-5 seconds) and dispatches once with the combined input.

@@ -1,4 +1,4 @@
-"""Conversation summarizer (PRD §4.3 FR-3.4, §8.4, §9.4).
+"""Conversation summarizer.
 
 Generates daily summaries of user conversations and compresses them into
 rolling summaries to keep prompt context bounded.

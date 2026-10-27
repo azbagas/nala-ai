@@ -1,4 +1,4 @@
-"""Prompt builder (PRD §6.2, §9.1).
+"""Prompt builder.
 
 Renders prompt templates with persona definitions, real-time context (WIB),
 simulated life state, and memory.

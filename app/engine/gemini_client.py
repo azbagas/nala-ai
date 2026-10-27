@@ -1,4 +1,4 @@
-"""Gemini client wrapper (PRD §6.2): retries, timeouts, token/latency logging."""
+"""Gemini client wrapper: retries, timeouts, token/latency logging."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Conversation engine (PRD §6.2, §8.1).
+"""Conversation engine.
 
 Orchestrates multi-turn conversation flow: builds prompt, calls Gemini with
 persona and history, validates output (Indonesian, no assistant voice), and
@@ -69,7 +69,7 @@ def is_predominantly_english(text: str) -> bool:
 _GENERIC_SPEAKERS = ("Aku", "Bot", "AI", "Assistant", "Asisten")
 
 # Help-offer sentences that sound like customer service. ('sebagai AI' is NOT removed:
-# an honest "aku AI" answer must survive, PRD FR-2.4.)
+# an honest "aku AI" answer must survive.)
 _HELP_OFFER = re.compile(r"ada yang (?:bisa|perlu) (?:saya |aku |ku)?(?:di)?bantu|bisa saya bantu|ada yang bisa kubantu", re.IGNORECASE)
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
 
@@ -222,7 +222,7 @@ class ConversationEngine:
         else:
             system_instruction = self.prompt_builder.build_system_prompt()
 
-        # Check natural language control intent (PRD §4.6, §8.1 step 4)
+        # Check natural language control intent
         if self.store and hasattr(self.store, "set_paused_until"):
             try:
                 from app.engine.intent import detect_natural_control_intent
@@ -241,7 +241,7 @@ class ConversationEngine:
             except Exception as exc:
                 log.warning("natural_intent_check_failed error=%r", exc)
 
-        # Distress / crisis safeguard (PRD §11.1)
+        # Distress / crisis safeguard
         if detect_distress(clean_user_text):
             log.warning("distress_detected -> supportive mode")
             system_instruction += build_distress_instruction(self.crisis_resources)
@@ -250,7 +250,7 @@ class ConversationEngine:
         contents = await self._build_contents(clean_user_text)
 
         # Persist the user turn and activity state first, so it survives a Gemini failure
-        # and proactive jobs see the user as active (PRD §8.1 step 2, FR-3.1)
+        # and proactive jobs see the user as active
         self._history.append(ChatMessage(role="user", content=clean_user_text))
         if self.store:
             try:
@@ -277,7 +277,7 @@ class ConversationEngine:
             log.error("conversation_gemini_error error=%r", exc)
             return [FALLBACK_REPLY]
 
-        # 2. Quality rules validation (PRD §10)
+        # 2. Quality rules validation
         needs_retry = contains_assistant_voice(raw_reply) or is_predominantly_english(raw_reply)
         if needs_retry:
             log.warning("reply_quality_flagged raw_reply=%r -> retrying once", raw_reply[:80])

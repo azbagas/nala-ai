@@ -1,4 +1,4 @@
-"""Distress / crisis detection (PRD §11.1).
+"""Distress / crisis detection.
 
 Lightweight keyword rules. They are deliberately conservative-but-broad: a false
 positive only makes the reply more careful, a false negative skips the safeguard.

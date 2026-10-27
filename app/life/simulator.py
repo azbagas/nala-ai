@@ -1,4 +1,4 @@
-"""Her simulated daily activity and mood generator (PRD §4.5, §8.5, §9.5).
+"""Her simulated daily activity and mood generator.
 
 Generates a realistic daily schedule, mood, and energy level for the persona
 each morning using Gemini. Persists the schedule to SQLite and resolves her
@@ -109,7 +109,7 @@ def get_fallback_daily_life(target_date: date, persona: Persona) -> DailyLifeRec
 
 
 class LifeSimulator:
-    """Simulates her daily schedule, mood, and activities (PRD §4.5, §8.5)."""
+    """Simulates her daily schedule, mood, and activities."""
 
     def __init__(
         self,
@@ -192,7 +192,7 @@ class LifeSimulator:
         target_date: date | None = None,
         force: bool = False,
     ) -> DailyLifeRecord:
-        """Generate and store her daily schedule and mood (PRD §8.5)."""
+        """Generate and store her daily schedule and mood."""
         now_dt = now_local(self.tz)
         t_date = target_date or now_dt.date()
         date_str = t_date.strftime("%Y-%m-%d")

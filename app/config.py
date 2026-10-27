@@ -1,8 +1,8 @@
-"""Config loader (PRD §6.2 "Config Loader").
+"""Config loader.
 
 Loads `config.yaml` + `persona.yaml`, expands ${VAR} / ${VAR:-default} from the
 environment, validates everything with pydantic, and supports persona reload.
-Secrets are read only from environment variables (PRD §11.3).
+Secrets are read only from environment variables.
 """
 
 from __future__ import annotations
@@ -199,7 +199,7 @@ class BackupSection(_Strict):
 
 
 class SafetySection(_Strict):
-    # Local help resources shown when the user expresses serious distress (PRD §11.1).
+    # Local help resources shown when the user expresses serious distress.
     crisis_resources: list[str] = []
 
 
@@ -289,7 +289,7 @@ class Settings:
         return self.config_dir / "persona.yaml"
 
     def reload_persona(self) -> Persona:
-        """Re-read persona.yaml (FR-2.3). Keeps the old persona if the new one is invalid."""
+        """Re-read persona.yaml. Keeps the old persona if the new one is invalid."""
         self.persona = load_persona(self.persona_path)
         return self.persona
 

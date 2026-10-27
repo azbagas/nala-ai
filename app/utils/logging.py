@@ -1,4 +1,4 @@
-"""Logging setup (PRD NFR-7): console + rotating file, key=value style."""
+"""Logging setup: console + rotating file, key=value style."""
 
 from __future__ import annotations
 

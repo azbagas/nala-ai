@@ -1,4 +1,4 @@
-"""Telegram handlers (PRD §6.2, §8.1, §4.6).
+"""Telegram handlers.
 
 Handles owner authentication, commands (/start, /ping, /reload_persona, /memory,
 /forget, /reset_memory, /run_nightly, /clear), message debouncing, and routing
@@ -168,7 +168,7 @@ async def clear_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def view_memory(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """View stored facts and pending threads (FR-3.7)."""
+    """View stored facts and pending threads."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -205,7 +205,7 @@ async def view_memory(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def forget_fact(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Deactivate a fact by ID (FR-3.7)."""
+    """Deactivate a fact by ID."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -229,7 +229,7 @@ async def forget_fact(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def reset_memory_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wipe memory after explicit confirmation (FR-3.7)."""
+    """Wipe memory after explicit confirmation."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -266,7 +266,7 @@ async def set_name_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def run_nightly_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Trigger the nightly memory extraction & summarization manually (FR-3.6)."""
+    """Trigger the nightly memory extraction & summarization manually."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -319,7 +319,7 @@ async def text_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def status_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Shows today's plan, counters, and pause state (FR-4.6, P1)."""
+    """Shows today's plan, counters, and pause state."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -372,7 +372,7 @@ async def status_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     else:
         lines.append("• Obrolan kamu terakhir: <i>(Belum ada)</i>")
 
-    # Observability & token stats (PRD §14.3)
+    # Observability & token stats
     try:
         now_utc_str = now_local(settings.tz).astimezone(timezone.utc).strftime("%Y-%m-%d")
         llm_stats = await store.get_today_llm_stats(now_utc_str)
@@ -388,7 +388,7 @@ async def status_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def frequency_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Adjust proactive messaging frequency: low, normal, high (FR-4.6, P2)."""
+    """Adjust proactive messaging frequency: low, normal, high."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -426,7 +426,7 @@ async def frequency_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def pause_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Stops proactive messages for a duration (FR-4.6, P0)."""
+    """Stops proactive messages for a duration."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -470,7 +470,7 @@ async def pause_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def resume_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Resumes proactive messages (FR-4.6, P0)."""
+    """Resumes proactive messages."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -524,7 +524,7 @@ async def test_proactive_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
 
 
 async def life_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """View or regenerate her simulated daily schedule (FR-5.1, FR-5.2)."""
+    """View or regenerate her simulated daily schedule."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -568,7 +568,7 @@ async def life_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def backup_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manually creates a timestamped SQLite database backup (Milestone M6)."""
+    """Manually creates a timestamped SQLite database backup."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return
@@ -595,7 +595,7 @@ async def backup_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def non_text_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Acknowledges non-text messages (photos, voice, stickers) naturally in Indonesian (PRD §13)."""
+    """Acknowledges non-text messages (photos, voice, stickers) naturally in Indonesian."""
     settings = _settings(ctx)
     if not _is_owner(update, settings) or update.effective_message is None:
         return

@@ -1,4 +1,4 @@
-"""Pre-send checks and backoff logic (PRD §4.4, §4.6, §4.10, §8.3).
+"""Pre-send checks and backoff logic.
 
 Ensures the bot does not send proactive messages during quiet hours, when
 paused, if the user chatted recently, when the daily cap is reached, or
@@ -26,7 +26,7 @@ class PreSendResult:
 
 
 def frequency_profile(freq: str | None, daily_cap: int) -> tuple[int, float]:
-    """Return (effective_daily_cap, chance_multiplier) for a /frequency setting (PRD §4.6)."""
+    """Return (effective_daily_cap, chance_multiplier) for a /frequency setting."""
     freq = (freq or "normal").lower()
     if freq == "low":
         return max(1, daily_cap // 2), 0.6
@@ -54,18 +54,18 @@ async def run_presend_checks(
     local_dt = now_dt.astimezone(tz)
     today_date = local_dt.strftime("%Y-%m-%d")
 
-    # 1. Quiet hours check (FR-4.4)
+    # 1. Quiet hours check
     if is_quiet_hours(local_dt, proactive_cfg.quiet_hours.start, proactive_cfg.quiet_hours.end):
         log.info("presend_skipped reason=quiet_hours time=%s", local_dt.strftime("%H:%M"))
         return PreSendResult(can_send=False, reason="quiet_hours")
 
-    # 2. Pause check (FR-4.6)
+    # 2. Pause check
     paused_until = await store.get_paused_until()
     if paused_until is not None and now_dt < paused_until:
         log.info("presend_skipped reason=paused until=%s", paused_until.isoformat())
         return PreSendResult(can_send=False, reason="paused")
 
-    # 3. User recent activity check (FR-4.6)
+    # 3. User recent activity check
     last_user_msg = await store.get_last_user_message_time()
     if last_user_msg is not None:
         elapsed_seconds = (now_dt - last_user_msg).total_seconds()
@@ -78,7 +78,7 @@ async def run_presend_checks(
             )
             return PreSendResult(can_send=False, reason="user_recently_active")
 
-    # 4. Daily cap check (FR-4.4, FR-4.6)
+    # 4. Daily cap check
     freq = await store.get_state("proactive_frequency", default="normal")
     effective_cap, _ = frequency_profile(freq, proactive_cfg.daily_cap)
     sent_count = await store.count_sent_proactive_for_date(today_date)
@@ -91,7 +91,7 @@ async def run_presend_checks(
         )
         return PreSendResult(can_send=False, reason="daily_cap_reached")
 
-    # 5. Ignored backoff check (FR-4.6, FR-4.10)
+    # 5. Ignored backoff check
     ignored_count = await store.get_ignored_count()
     if ignored_count >= proactive_cfg.stop_after_ignored:
         log.info(

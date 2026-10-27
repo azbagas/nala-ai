@@ -1,4 +1,4 @@
-# Main runtime configuration (PRD §18.1).
+# Main runtime configuration.
 # ${VAR} / ${VAR:-default} are expanded from environment variables / .env.
 
 app:
@@ -64,7 +64,7 @@ backup:
   daily_time: "03:00"
   keep_days: 14
 
-# Shown when the user expresses serious distress (PRD 11.1). Owner must verify and fill in local resources.
+# Shown when the user expresses serious distress. Owner must verify and fill in local resources.
 safety:
   crisis_resources:
     - "Layanan Sejiwa Kemenkes: telepon 119 ext. 8 (verifikasi dulu sebelum dipakai)"

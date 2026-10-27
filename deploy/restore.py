@@ -1,4 +1,4 @@
-"""Disaster recovery and backup restore utility (Milestone M6).
+"""Disaster recovery and backup restore utility.
 
 Usage:
     python -m deploy.restore --list

@@ -1,4 +1,4 @@
-"""Memory extraction engine (PRD §4.3 FR-3.2, FR-3.3, FR-3.6, §8.4, §9.3).
+"""Memory extraction engine.
 
 Extracts durable facts about the user and follow-up threads from raw conversations
 using structured JSON output and validates it with Pydantic.

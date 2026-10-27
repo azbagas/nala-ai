@@ -1,4 +1,4 @@
-"""Bubble splitting and typing delay logic (PRD §4.1 FR-1.4, FR-1.5).
+"""Bubble splitting and typing delay logic.
 
 Splits bot replies into short chat-like bubbles and sends them with a realistic
 typing indicator and delay proportional to bubble length.

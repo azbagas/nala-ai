@@ -1,4 +1,4 @@
-"""SQLite (WAL) data access layer (PRD §6.2, §7).
+"""SQLite (WAL) data access layer.
 
 Implements persistence for messages, facts, open threads, summaries,
 daily life, proactive plans, state, and LLM call observability.
@@ -598,7 +598,7 @@ class MemoryStore:
             }
 
     # -----------------------------------------------------------------------
-    # Memory Reset (FR-3.7)
+    # Memory Reset
     # -----------------------------------------------------------------------
 
     async def reset_memory(self) -> None:
@@ -613,7 +613,7 @@ class MemoryStore:
         log.info("memory_reset_completed")
 
     # -----------------------------------------------------------------------
-    # Proactive Plans (FR-4.5)
+    # Proactive Plans
     # -----------------------------------------------------------------------
 
     async def create_plan(
@@ -745,7 +745,7 @@ class MemoryStore:
             ]
 
     # -----------------------------------------------------------------------
-    # Proactive Runtime State Helpers (FR-4.6, FR-4.10)
+    # Proactive Runtime State Helpers
     # -----------------------------------------------------------------------
 
     async def update_last_user_message_time(self, ts: datetime | None = None) -> None:
@@ -806,7 +806,7 @@ class MemoryStore:
         await self.set_state("owner_chat_id", str(chat_id))
 
     # -----------------------------------------------------------------------
-    # Daily Life (FR-5.1, FR-5.2)
+    # Daily Life
     # -----------------------------------------------------------------------
 
     async def save_daily_life(

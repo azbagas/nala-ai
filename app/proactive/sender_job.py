@@ -1,4 +1,4 @@
-"""Proactive message sending job (PRD §4.4, §4.7, §4.8, §4.10, §8.3).
+"""Proactive message sending job.
 
 Executes scheduled proactive sends: performs pre-send checks, selects a varied
 message type, builds the contextual proactive prompt, calls Gemini, validates
@@ -52,7 +52,7 @@ def choose_message_type(
     is_backoff_mode: bool = False,
     rng: random.Random | None = None,
 ) -> str:
-    """Select the message type with weighted randomness and variety enforcement (FR-4.8)."""
+    """Select the message type with weighted randomness and variety enforcement."""
     _rng = rng or random.Random()
 
     # If an open thread is clearly due, strongly prefer 'followup'
@@ -77,7 +77,7 @@ def choose_message_type(
 
 
 def compute_text_similarity(a: str, b: str) -> float:
-    """Compute word-level Jaccard similarity between two texts (PRD §10)."""
+    """Compute word-level Jaccard similarity between two texts."""
     words_a = set(re.findall(r"\w+", a.lower()))
     words_b = set(re.findall(r"\w+", b.lower()))
     if not words_a or not words_b:
@@ -86,7 +86,7 @@ def compute_text_similarity(a: str, b: str) -> float:
 
 
 def is_too_similar(candidate: str, past_texts: list[str], threshold: float = 0.55) -> tuple[bool, str | None]:
-    """Check if candidate text is overly similar to any past message or opening phrase (PRD §10)."""
+    """Check if candidate text is overly similar to any past message or opening phrase."""
     cand_lower = candidate.strip().lower()
     cand_words = re.findall(r"\w+", cand_lower)
 
@@ -121,8 +121,8 @@ async def send_proactive(
     rng: random.Random | None = None,
     simulate_typing: bool = True,
 ) -> bool:
-    """Execute a planned proactive message send (PRD §8.3)."""
-    # 1. Load plan row; if status != 'planned', exit (idempotency, §8.3 step 1)
+    """Execute a planned proactive message send."""
+    # 1. Load plan row; if status != 'planned', exit (idempotency)
     plan = await store.get_plan_by_id(plan_id)
     if not plan:
         log.warning("send_proactive_aborted plan_not_found plan_id=%d", plan_id)
@@ -137,7 +137,7 @@ async def send_proactive(
     local_dt = now_dt.astimezone(tz)
     today_str = local_dt.strftime("%Y-%m-%d")
 
-    # 2. Pre-send checks (§8.3 step 2)
+    # 2. Pre-send checks
     presend = await run_presend_checks(store, proactive_cfg, tz, now=now_dt)
     if not presend.can_send:
         await store.update_plan_status(plan_id, status="skipped", skip_reason=presend.reason)
@@ -153,7 +153,7 @@ async def send_proactive(
         log.warning("send_proactive_skipped plan_id=%d reason=no_owner_chat_id", plan_id)
         return False
 
-    # 3. Message type selection (§8.3 step 3)
+    # 3. Message type selection
     recent_proactive = await store.get_recent_proactive_messages(limit=5)
     recent_types = [m.proactive_type for m in recent_proactive if m.proactive_type]
     recent_proactive_texts = [m.content for m in recent_proactive[:3]]
@@ -193,7 +193,7 @@ async def send_proactive(
         else None
     )
 
-    # 4. Build prompt (§8.3 step 4)
+    # 4. Build prompt
     user_name = await store.get_user_name() if hasattr(store, "get_user_name") else None
     system_instruction = await prompt_builder.build_system_prompt_from_store(store, dt=local_dt)
     proactive_prompt = prompt_builder.build_proactive_prompt(
@@ -215,7 +215,7 @@ async def send_proactive(
             "Jangan bertanya hal berat atau menuntut jawaban."
         )
 
-    # 5. Call Gemini (§8.3 step 5)
+    # 5. Call Gemini
     try:
         result = await gemini.generate(
             contents=proactive_prompt,
@@ -231,7 +231,7 @@ async def send_proactive(
         await store.update_plan_status(plan_id, status="failed", skip_reason=f"gemini_error: {exc}")
         return False
 
-    # Validation & retry if quality flagged or repetitive (PRD §10)
+    # Validation & retry if quality flagged or repetitive
     needs_retry = contains_assistant_voice(raw_text) or is_predominantly_english(raw_text)
     too_similar, dup_text = is_too_similar(raw_text, recent_proactive_texts)
 
@@ -268,7 +268,7 @@ async def send_proactive(
     if not bubbles:
         bubbles = ["Lagi senggang nih, gimana harimu?"]
 
-    # 6. Send bubbles via Telegram (§8.3 step 6)
+    # 6. Send bubbles via Telegram
     try:
         await send_bubbles(
             bot=bot,
@@ -278,7 +278,7 @@ async def send_proactive(
             simulate_typing=simulate_typing,
         )
     except Forbidden as exc:
-        # The user blocked the bot: stop all proactive jobs for a long time (PRD §13)
+        # The user blocked the bot: stop all proactive jobs for a long time
         log.error("send_proactive_bot_blocked plan_id=%d chat_id=%s error=%r -> pausing proactive", plan_id, chat_id, exc)
         await store.set_paused_until(now_dt + timedelta(days=BLOCKED_PAUSE_DAYS))
         await store.update_plan_status(plan_id, status="failed", skip_reason="bot_blocked")
@@ -288,7 +288,7 @@ async def send_proactive(
         await store.update_plan_status(plan_id, status="failed", skip_reason=f"telegram_error: {exc}")
         return False
 
-    # 7. Store message and increment ignored_count (§8.3 step 6 & 7)
+    # 7. Store message and increment ignored_count
     saved_content = "\n---\n".join(bubbles)
     msg_id = await store.save_message(
         role="bot",
@@ -298,7 +298,7 @@ async def send_proactive(
     )
     await store.increment_ignored_count()
 
-    # 8. Update plan row to sent (§8.3 step 8)
+    # 8. Update plan row to sent
     await store.update_plan_status(plan_id, status="sent", message_id=msg_id)
     log.info(
         "proactive_message_sent plan_id=%d type=%s msg_id=%d bubbles=%d chars=%d",

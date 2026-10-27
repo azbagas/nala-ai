@@ -182,7 +182,7 @@ async def test_conversation_engine_with_memory_store(tmp_path):
     call_args = mock_gemini.generate.call_args
     assert "Software Engineer di Bandung" in call_args.kwargs["system_instruction"]
 
-    # Verify last_user_message_time updated and ignored_count reset (PRD §8.1)
+    # Verify last_user_message_time updated and ignored_count reset
     assert await store.get_last_user_message_time() is not None
     assert await store.get_ignored_count() == 0
 
