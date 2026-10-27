@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from app.config import LLMSection
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.memory.store import FactRecord, MemoryStore, MessageRecord, ThreadRecord
 from app.utils.time import now_local
 
@@ -77,13 +77,13 @@ class MemoryExtractor:
 
     def __init__(
         self,
-        gemini: GeminiClient,
+        llm: LLMClient,
         store: MemoryStore,
         prompts_dir: Path,
         llm_cfg: LLMSection,
         tz: ZoneInfo,
     ) -> None:
-        self.gemini = gemini
+        self.llm = llm
         self.store = store
         self.prompts_dir = prompts_dir
         self.llm_cfg = llm_cfg
@@ -141,7 +141,7 @@ class MemoryExtractor:
         prompt = prompt.replace("{{messages}}", self._format_messages(messages))
 
         try:
-            result = await self.gemini.generate(
+            result = await self.llm.generate(
                 contents=prompt,
                 model=self.llm_cfg.utility_model,
                 temperature=self.llm_cfg.temperature_utility,
@@ -149,7 +149,7 @@ class MemoryExtractor:
                 purpose="extract_memory",
             )
             payload = parse_extraction_json(result.text)
-        except (GeminiError, Exception) as exc:
+        except (LLMError, Exception) as exc:
             log.error("memory_extraction_failed error=%r", exc)
             return ExtractionSummary(len(messages), 0, 0, 0, 0)
 

@@ -123,6 +123,25 @@ class LLMSection(_Strict):
     history_window_messages: int = Field(24, gt=0)
     request_timeout_seconds: float = Field(30, gt=0)
     max_retries: int = Field(3, ge=0)
+    base_url: str | None = None
+    reasoning_effort: str | None = None
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _empty_base_url_to_none(cls, v: Any) -> str | None:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _validate_reasoning_effort(cls, v: Any) -> str | None:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        val = str(v).strip().lower()
+        if val in ("none", "low", "medium", "high"):
+            return val
+        raise ValueError(f"reasoning_effort must be one of 'none', 'low', 'medium', 'high', got {v!r}")
 
 
 class TypingDelay(_Strict):
@@ -253,10 +272,10 @@ class Persona(BaseModel):
 @dataclass(frozen=True)
 class Secrets:
     telegram_bot_token: str
-    gemini_api_key: str
+    llm_api_key: str
 
     def __repr__(self) -> str:  # never leak secrets into logs
-        return "Secrets(telegram_bot_token=***, gemini_api_key=***)"
+        return "Secrets(telegram_bot_token=***, llm_api_key=***)"
 
 
 @dataclass
@@ -299,12 +318,17 @@ class Settings:
 # ---------------------------------------------------------------------------
 
 def load_secrets() -> Secrets:
-    missing = [n for n in ("TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY") if not os.environ.get(n)]
-    if missing:
-        raise ConfigError(f"Missing required environment variables: {', '.join(missing)}")
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not tg_token or not tg_token.strip():
+        raise ConfigError("Missing required environment variable: TELEGRAM_BOT_TOKEN")
+
+    llm_key = os.environ.get("LLM_API_KEY", "").strip()
+    if not llm_key:
+        raise ConfigError("Missing required environment variable: LLM_API_KEY")
+
     return Secrets(
-        telegram_bot_token=os.environ["TELEGRAM_BOT_TOKEN"].strip(),
-        gemini_api_key=os.environ["GEMINI_API_KEY"].strip(),
+        telegram_bot_token=tg_token.strip(),
+        llm_api_key=llm_key,
     )
 
 

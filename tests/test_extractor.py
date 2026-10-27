@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import LLMSection
-from app.engine.gemini_client import GeminiResult
+from app.engine.llm_client import LLMResult
 from app.memory.extractor import MemoryExtractor, parse_extraction_json
 from app.memory.store import MemoryStore
 
@@ -65,7 +65,7 @@ async def test_extract_new_memories(tmp_path):
     await store.save_message("bot", "Wah selamat ya!")
     await store.save_message("user", "Oh ya wawancara yang kemarin udah selesai dan lolos.")
 
-    mock_gemini = AsyncMock()
+    mock_llm = AsyncMock()
     json_response = f"""{{
       "new_facts": [{{"category": "work", "content": "Posisi saat ini Senior Engineer", "confidence": 0.95}}],
       "updated_facts": [{{"id": {old_f_id}, "new_content": "Sudah bukan Junior, sekarang Senior"}}],
@@ -73,7 +73,7 @@ async def test_extract_new_memories(tmp_path):
       "resolved_thread_ids": [{old_t_id}],
       "mood_note": "Sangat senang"
     }}"""
-    mock_gemini.generate.return_value = GeminiResult(
+    mock_llm.generate.return_value = LLMResult(
         text=json_response,
         model="gemini-test",
         input_tokens=200,
@@ -82,7 +82,7 @@ async def test_extract_new_memories(tmp_path):
     )
 
     extractor = MemoryExtractor(
-        gemini=mock_gemini,
+        llm=mock_llm,
         store=store,
         prompts_dir=PROMPTS_DIR,
         llm_cfg=LLMSection(chat_model="test", utility_model="test-lite"),

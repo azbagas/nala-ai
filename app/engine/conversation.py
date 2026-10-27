@@ -14,10 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from google.genai import types
-
 from app.config import ConversationSection, LLMSection
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError, LLMResult
 from app.engine.prompt_builder import PromptBuilder
 from app.engine.safety import build_distress_instruction, detect_distress
 from app.gateway.sender import split_bubbles
@@ -120,18 +118,18 @@ def extract_introduced_name(text: str) -> str | None:
 
 
 class ConversationEngine:
-    """Manages chat turns, history, Gemini calls, and response validation."""
+    """Manages chat turns, history, LLM calls, and response validation."""
 
     def __init__(
         self,
-        gemini: GeminiClient,
+        llm: LLMClient,
         prompt_builder: PromptBuilder,
         llm_cfg: LLMSection,
         conv_cfg: ConversationSection,
         store: Any = None,
         crisis_resources: Sequence[str] = (),
     ) -> None:
-        self.gemini = gemini
+        self.llm = llm
         self.prompt_builder = prompt_builder
         self.llm_cfg = llm_cfg
         self.conv_cfg = conv_cfg
@@ -151,48 +149,30 @@ class ConversationEngine:
         self._history.clear()
         log.info("cleared_conversation_history count=%d", count)
 
-    async def _build_contents(self, new_user_text: str) -> list[types.Content]:
-        """Convert recent message history plus current user input into Gemini contents."""
-        contents: list[types.Content] = []
+    async def _build_contents(self, new_user_text: str) -> list[dict[str, str]]:
+        """Convert recent message history plus current user input into standard messages."""
+        contents: list[dict[str, str]] = []
 
         if self.store:
             try:
                 db_messages = await self.store.get_recent_messages(limit=self.llm_cfg.history_window_messages)
                 for m in db_messages:
-                    role = "user" if m.role == "user" else "model"
-                    contents.append(
-                        types.Content(
-                            role=role,
-                            parts=[types.Part.from_text(text=m.content)],
-                        )
-                    )
+                    role = "user" if m.role == "user" else "assistant"
+                    contents.append({"role": role, "content": m.content})
             except Exception as exc:
                 log.warning("failed_to_fetch_db_messages error=%r -> falling back to memory", exc)
                 window = self._history[-self.llm_cfg.history_window_messages :]
                 for msg in window:
-                    contents.append(
-                        types.Content(
-                            role=msg.role,
-                            parts=[types.Part.from_text(text=msg.content)],
-                        )
-                    )
+                    role = "user" if msg.role == "user" else "assistant"
+                    contents.append({"role": role, "content": msg.content})
         else:
             window = self._history[-self.llm_cfg.history_window_messages :]
             for msg in window:
-                contents.append(
-                    types.Content(
-                        role=msg.role,
-                        parts=[types.Part.from_text(text=msg.content)],
-                    )
-                )
+                role = "user" if msg.role == "user" else "assistant"
+                contents.append({"role": role, "content": msg.content})
 
         # Append current user turn
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=new_user_text)],
-            )
-        )
+        contents.append({"role": "user", "content": new_user_text})
         return contents
 
     async def reply(self, user_text: str) -> list[str]:
@@ -264,7 +244,7 @@ class ConversationEngine:
 
         # 1. First attempt to generate reply
         try:
-            result = await self.gemini.generate(
+            result = await self.llm.generate(
                 contents=contents,
                 model=self.llm_cfg.chat_model,
                 system_instruction=system_instruction,
@@ -273,8 +253,8 @@ class ConversationEngine:
                 purpose="chat",
             )
             raw_reply = result.text
-        except GeminiError as exc:
-            log.error("conversation_gemini_error error=%r", exc)
+        except LLMError as exc:
+            log.error("conversation_llm_error error=%r", exc)
             return [FALLBACK_REPLY]
 
         # 2. Quality rules validation
@@ -287,7 +267,7 @@ class ConversationEngine:
                 "JANGAN gunakan gaya asisten AI (seperti 'ada yang bisa dibantu' atau 'sebagai AI')."
             )
             try:
-                retry_result = await self.gemini.generate(
+                retry_result = await self.llm.generate(
                     contents=contents,
                     model=self.llm_cfg.chat_model,
                     system_instruction=softened_instruction,
@@ -296,8 +276,8 @@ class ConversationEngine:
                     purpose="chat_retry",
                 )
                 raw_reply = retry_result.text
-            except GeminiError as exc:
-                log.warning("retry_gemini_error error=%r -> using sanitized first reply", exc)
+            except LLMError as exc:
+                log.warning("retry_llm_error error=%r -> using sanitized first reply", exc)
 
         # 3. Sanitize and split into bubbles
         cleaned_reply = sanitize_text(raw_reply, speaker_names=(self.prompt_builder.persona.name,))

@@ -4,12 +4,12 @@
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg" alt="Python 3.12+" />
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" />
   <img src="https://img.shields.io/badge/Telegram-python--telegram--bot-2CA5E0.svg?logo=telegram&logoColor=white" alt="Telegram Bot" />
-  <img src="https://img.shields.io/badge/LLM-Google%20Gemini-orange.svg?logo=google&logoColor=white" alt="Google Gemini" />
+  <img src="https://img.shields.io/badge/LLM-Universal%20(LiteLLM)-orange.svg" alt="Universal LLM" />
   <img src="https://img.shields.io/badge/Database-SQLite%20WAL-003B57.svg?logo=sqlite&logoColor=white" alt="SQLite WAL" />
-  <img src="https://img.shields.io/badge/Tests-113%20passed-brightgreen.svg" alt="Pytest Status" />
+  <img src="https://img.shields.io/badge/Tests-122%20passed-brightgreen.svg" alt="Pytest Status" />
 </p>
 
-A single-user, proactive AI companion bot for Telegram speaking natural, casual Indonesian. Powered by Google Gemini and SQLite, she doesn't just passively wait for you to message her—she plans her own day, lives her own routine, remembers your life details, and texts you first.
+A single-user, proactive AI companion bot for Telegram speaking natural, casual Indonesian. Powered by universal LLM integrations (LiteLLM: Gemini, Claude, GPT, DeepSeek, OpenRouter, Groq, Ollama) and SQLite, she doesn't just passively wait for you to message her—she plans her own day, lives her own routine, remembers your life details, and texts you first.
 
 ---
 
@@ -83,8 +83,8 @@ flowchart TD
     subgraph LLMEngine ["LLM Pipeline (app/engine)"]
         Engine --> PromptBuilder[Prompt Builder]
         PromptBuilder --> Context[Persona + Memory + Life State + Chat History]
-        Context --> Gemini[Google Gemini 2.5/3.5 Flash]
-        Gemini --> Sanitizer[Sanitizer & Distress Detector]
+        Context --> LLM[Universal LLM: Gemini, Claude, GPT, DeepSeek, OpenRouter, Ollama]
+        LLM --> Sanitizer[Sanitizer & Distress Detector]
         Sanitizer --> BubbleSplitter[Split into Timed Bubbles]
         BubbleSplitter --> Sender[Telegram Timed Sender]
     end
@@ -114,7 +114,7 @@ flowchart TD
 
 - **Python**: Version 3.12 or newer.
 - **Telegram Bot Token**: Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and copy the API token.
-- **Google Gemini API Key**: Obtain a free API key from [Google AI Studio](https://aistudio.google.com/).
+- **LLM API Key**: Obtain an API key for your preferred provider (e.g., Google AI Studio, Anthropic, OpenAI, DeepSeek, OpenRouter, or local Ollama).
 
 ### Local Installation
 
@@ -147,7 +147,7 @@ copy .env.example .env
 Edit `.env` and fill in your credentials:
 ```env
 TELEGRAM_BOT_TOKEN="123456789:ABCdefGhIJKlmNoPQRstuvWxyz"
-GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+LLM_API_KEY="your-api-key-here"
 OWNER_ID=
 ```
 
@@ -166,7 +166,7 @@ To protect your privacy and ensure single-user ownership:
 
 ### Connectivity Check
 
-Before running, verify that your configuration, SQLite store, Telegram token, and Gemini models are operational:
+Before running, verify that your configuration, SQLite store, Telegram token, and LLM models are operational:
 
 ```bash
 python -m app.main --check
@@ -186,7 +186,7 @@ python -m app.main
 | Command | Arguments | Description |
 |---|---|---|
 | `/start` | - | Greets owner in character (or provides your User ID during initial setup). |
-| `/ping` | - | Round-trip latency and token check with Google Gemini. |
+| `/ping` | - | Round-trip latency and token check with configured LLM. |
 | `/reload_persona` | - | Hot-reloads `config/persona.yaml` immediately without restarting. |
 | `/memory` | - | Displays active remembered facts, open follow-up threads, and summaries. |
 | `/forget` | `<id>` | Soft-deletes a remembered fact by its numeric ID. |
@@ -338,7 +338,7 @@ python -m deploy.restore --file data/backups/companion_backup_20261007_084629.db
 
 ### Running the Test Suite
 
-The test suite contains 113 comprehensive unit and integration tests covering debouncers, extractors, prompt builders, proactive planners, and SQLite stores:
+The test suite contains 122 comprehensive unit and integration tests covering debouncers, extractors, prompt builders, proactive planners, and SQLite stores:
 
 ```bash
 # Run all tests
@@ -366,7 +366,7 @@ python -m compileall app tests deploy
 ## Privacy, Safety & Boundaries
 
 - **Single-User Access**: Nala is strictly dedicated to her owner. Any other Telegram accounts attempting to communicate with the bot are silently dropped.
-- **Local Data Storage**: All conversation history, extracted memories, and logs reside locally in your SQLite database. Your data is never shared with third parties, aside from the necessary LLM inference requests to Google Gemini.
+- **Local Data Storage**: All conversation history, extracted memories, and logs reside locally in your SQLite database. Your data is never shared with third parties, aside from the necessary inference requests to your configured LLM provider.
 - **Distress & Crisis Guardrails**: If emotional distress, hopelessness, or self-harm is expressed, the bot shifts away from casual roleplay, shows compassion, and provides verified Indonesian crisis hotlines:
   - *Layanan Sejiwa Kemenkes*: Telepon `119 ext. 8`
   - Encourages speaking with trusted friends, family, or local psychological professionals.
@@ -381,10 +381,10 @@ nala-ai/
 ├── app/
 │   ├── main.py              # Application entrypoint & CLI flags (--check)
 │   ├── config.py            # Pydantic v2 configuration models & env loader
-│   ├── engine/              # LLM conversation pipeline & Gemini client
+│   ├── engine/              # Universal LLM conversation pipeline
 │   │   ├── conversation.py  # Response generation & fallback handling
-│   │   ├── gemini_client.py # Google GenAI SDK wrapper with retry logic
 │   │   ├── intent.py        # Natural language pause/resume detection
+│   │   ├── llm_client.py    # Universal LiteLLM client wrapper with retry logic
 │   │   ├── prompt_builder.py# Dynamic system prompt & context assembler
 │   │   └── safety.py        # Distress signal detector & sanitizer
 │   ├── gateway/             # Telegram interaction layer

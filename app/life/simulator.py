@@ -1,7 +1,7 @@
 """Her simulated daily activity and mood generator.
 
 Generates a realistic daily schedule, mood, and energy level for the persona
-each morning using Gemini. Persists the schedule to SQLite and resolves her
+each morning using LLM. Persists the schedule to SQLite and resolves her
 current activity based on the time of day to keep her simulated life consistent.
 """
 
@@ -16,7 +16,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.config import LLMSection, Persona
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.memory.store import DailyLifeRecord, MemoryStore, ScheduleBlock
 from app.utils.time import day_name_id, in_time_range, now_local, now_utc, parse_hhmm, to_utc_iso
 
@@ -26,7 +26,7 @@ _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 
 
 def parse_daily_life_json(text: str) -> dict[str, Any]:
-    """Parse JSON output from Gemini, handling markdown code fences."""
+    """Parse JSON output from LLM, handling markdown code fences."""
     cleaned = text.strip()
     match = _JSON_BLOCK_RE.search(cleaned)
     raw_json = match.group(1).strip() if match else cleaned
@@ -113,14 +113,14 @@ class LifeSimulator:
 
     def __init__(
         self,
-        gemini: GeminiClient,
+        llm: LLMClient,
         store: MemoryStore,
         persona: Persona,
         prompts_dir: Path,
         llm_cfg: LLMSection,
         tz: ZoneInfo,
     ) -> None:
-        self.gemini = gemini
+        self.llm = llm
         self.store = store
         self.persona = persona
         self.prompts_dir = prompts_dir
@@ -221,9 +221,9 @@ class LifeSimulator:
             recent_notes=recent_notes,
         )
 
-        # 4. Call Gemini
+        # 4. Call LLM
         try:
-            result = await self.gemini.generate(
+            result = await self.llm.generate(
                 contents=prompt_text,
                 model=self.llm_cfg.utility_model,
                 temperature=self.llm_cfg.temperature_utility,

@@ -12,7 +12,7 @@ from telegram.error import Forbidden
 
 from app.config import ConversationSection, LLMSection, Persona, ProactiveSection, TimeRange, Window
 from app.engine.conversation import ConversationEngine, FALLBACK_REPLY, sanitize_text
-from app.engine.gemini_client import GeminiError, GeminiResult
+from app.engine.llm_client import LLMError, LLMResult
 from app.engine.prompt_builder import PromptBuilder
 from app.engine.safety import build_distress_instruction, detect_distress
 from app.memory.store import MemoryStore
@@ -42,10 +42,10 @@ def proactive_cfg() -> ProactiveSection:
     )
 
 
-def _engine(store, gemini, resources=()):
+def _engine(store, llm, resources=()):
     builder = PromptBuilder(ROOT / "prompts", Persona(name="Nala"), WIB)
     return ConversationEngine(
-        gemini=gemini,
+        llm=llm,
         prompt_builder=builder,
         llm_cfg=LLMSection(chat_model="m", utility_model="u", history_window_messages=5),
         conv_cfg=ConversationSection(),
@@ -54,12 +54,12 @@ def _engine(store, gemini, resources=()):
     )
 
 
-# Issue 1 + 2: user message persisted even when Gemini fails
+# Issue 1 + 2: user message persisted even when LLM fails
 @pytest.mark.asyncio
-async def test_user_message_saved_when_gemini_fails(store):
-    gemini = AsyncMock()
-    gemini.generate.side_effect = GeminiError("down")
-    bubbles = await _engine(store, gemini).reply("Halo Nala")
+async def test_user_message_saved_when_llm_fails(store):
+    llm = AsyncMock()
+    llm.generate.side_effect = LLMError("down")
+    bubbles = await _engine(store, llm).reply("Halo Nala")
 
     assert bubbles == [FALLBACK_REPLY]
     msgs = await store.get_recent_messages()
@@ -69,12 +69,12 @@ async def test_user_message_saved_when_gemini_fails(store):
 
 @pytest.mark.asyncio
 async def test_user_turn_not_duplicated_in_prompt(store):
-    gemini = AsyncMock()
-    gemini.generate.return_value = GeminiResult("Hai juga!", "m", 1, 1, 1)
-    await _engine(store, gemini).reply("Halo unik")
+    llm = AsyncMock()
+    llm.generate.return_value = LLMResult("Hai juga!", "m", 1, 1, 1)
+    await _engine(store, llm).reply("Halo unik")
 
-    contents = gemini.generate.call_args.kwargs["contents"]
-    texts = [c.parts[0].text for c in contents]
+    contents = llm.generate.call_args.kwargs["contents"]
+    texts = [c["content"] if isinstance(c, dict) else c.parts[0].text for c in contents]
     assert texts.count("Halo unik") == 1
 
 
@@ -112,11 +112,11 @@ def test_distress_instruction_includes_resources():
 
 @pytest.mark.asyncio
 async def test_engine_uses_supportive_prompt_on_distress(store):
-    gemini = AsyncMock()
-    gemini.generate.return_value = GeminiResult("Aku di sini ya.", "m", 1, 1, 1)
-    await _engine(store, gemini, resources=["Sejiwa 119 ext 8"]).reply("aku pengen mati")
+    llm = AsyncMock()
+    llm.generate.return_value = LLMResult("Aku di sini ya.", "m", 1, 1, 1)
+    await _engine(store, llm, resources=["Sejiwa 119 ext 8"]).reply("aku pengen mati")
 
-    system = gemini.generate.call_args.kwargs["system_instruction"]
+    system = llm.generate.call_args.kwargs["system_instruction"]
     assert "KONDISI SERIUS" in system
     assert "Sejiwa 119 ext 8" in system
 
@@ -124,8 +124,8 @@ async def test_engine_uses_supportive_prompt_on_distress(store):
 # Issue 5: bot blocked
 @pytest.mark.asyncio
 async def test_forbidden_pauses_proactive(store, proactive_cfg):
-    gemini = AsyncMock()
-    gemini.generate.return_value = GeminiResult("Pagi! Lagi apa nih?", "m", 1, 1, 1)
+    llm = AsyncMock()
+    llm.generate.return_value = LLMResult("Pagi! Lagi apa nih?", "m", 1, 1, 1)
     builder = PromptBuilder(ROOT / "prompts", Persona(name="Nala"), WIB)
     bot = MagicMock()
     bot.send_chat_action = AsyncMock()
@@ -139,7 +139,7 @@ async def test_forbidden_pauses_proactive(store, proactive_cfg):
         plan_id=plan_id,
         bot=bot,
         store=store,
-        gemini=gemini,
+        llm=llm,
         prompt_builder=builder,
         proactive_cfg=proactive_cfg,
         conv_cfg=ConversationSection(),

@@ -8,14 +8,26 @@ app:
   log_level: ${LOG_LEVEL:-INFO}
 
 llm:
+  # Universal model support via LiteLLM:
+  # Examples:
+  #   - Google Gemini:  provider: "gemini", chat_model: "gemini-2.5-flash"
+  #   - OpenRouter:     provider: "openrouter", chat_model: "anthropic/claude-3.5-sonnet"
+  #   - Anthropic:      provider: "anthropic", chat_model: "claude-3-5-sonnet-20241022"
+  #   - OpenAI:         provider: "openai", chat_model: "gpt-4o"
+  #   - DeepSeek:       provider: "deepseek", chat_model: "deepseek-chat"
+  #   - Groq:           provider: "groq", chat_model: "llama-3.3-70b-versatile"
+  #   - Ollama (local): provider: "ollama", chat_model: "llama3.2" (set LLM_BASE_URL=http://localhost:11434)
   provider: gemini
   # Verify availability with: python -m app.main --check
-  # chat_model: "gemini-3.8-flash"           # stronger model for conversation
   chat_model: "gemini-3.5-flash-lite"
-  utility_model: "gemini-3.5-flash-lite"   # cheap/fast model for extraction, summaries, life
+  utility_model: "gemini-3.5-flash-lite"   # fast/cheap model for extraction, summaries, life
+  base_url: ${LLM_BASE_URL:-}
   temperature_chat: 0.9
   temperature_utility: 0.2
-  max_output_tokens_chat: 120
+  # Reasoning effort for models with thinking/reasoning (e.g. OpenAI o1/o3, OpenRouter Nemotron/DeepSeek):
+  # Options: "none" (turn off thinking for instant chat), "low", "medium", "high", or null
+  reasoning_effort: "none"
+  max_output_tokens_chat: 300
   history_window_messages: 24
   request_timeout_seconds: 30
   max_retries: 3

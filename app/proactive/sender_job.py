@@ -1,7 +1,7 @@
 """Proactive message sending job.
 
 Executes scheduled proactive sends: performs pre-send checks, selects a varied
-message type, builds the contextual proactive prompt, calls Gemini, validates
+message type, builds the contextual proactive prompt, calls LLM, validates
 output, sends split bubbles via Telegram, and tracks state/plans idempotently.
 """
 
@@ -19,7 +19,7 @@ from telegram.error import Forbidden
 
 from app.config import ConversationSection, LLMSection, ProactiveSection
 from app.engine.conversation import contains_assistant_voice, is_predominantly_english, sanitize_text
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.engine.prompt_builder import PromptBuilder, format_time_elapsed_id
 from app.gateway.sender import send_bubbles, split_bubbles
 from app.memory.store import MemoryStore, ThreadRecord
@@ -110,7 +110,7 @@ async def send_proactive(
     plan_id: int,
     bot: Bot,
     store: MemoryStore,
-    gemini: GeminiClient,
+    llm: LLMClient,
     prompt_builder: PromptBuilder,
     proactive_cfg: ProactiveSection,
     conv_cfg: ConversationSection,
@@ -215,9 +215,9 @@ async def send_proactive(
             "Jangan bertanya hal berat atau menuntut jawaban."
         )
 
-    # 5. Call Gemini
+    # 5. Call LLM
     try:
-        result = await gemini.generate(
+        result = await llm.generate(
             contents=proactive_prompt,
             model=llm_cfg.chat_model,
             system_instruction=system_instruction,
@@ -226,9 +226,9 @@ async def send_proactive(
             purpose="proactive",
         )
         raw_text = result.text
-    except GeminiError as exc:
-        log.error("send_proactive_gemini_error plan_id=%d error=%r", plan_id, exc)
-        await store.update_plan_status(plan_id, status="failed", skip_reason=f"gemini_error: {exc}")
+    except LLMError as exc:
+        log.error("send_proactive_llm_error plan_id=%d error=%r", plan_id, exc)
+        await store.update_plan_status(plan_id, status="failed", skip_reason=f"llm_error: {exc}")
         return False
 
     # Validation & retry if quality flagged or repetitive
@@ -245,7 +245,7 @@ async def send_proactive(
             retry_prompt += f"\n\nPENTING: Pesanmu mirip dengan pesan sebelumnya ('{dup_text}'). Ganti sapaan dan topik yang berbeda!"
 
         try:
-            retry_res = await gemini.generate(
+            retry_res = await llm.generate(
                 contents=retry_prompt,
                 model=llm_cfg.chat_model,
                 system_instruction=system_instruction,
@@ -254,7 +254,7 @@ async def send_proactive(
                 purpose="proactive_retry",
             )
             raw_text = retry_res.text
-        except GeminiError:
+        except LLMError:
             pass
 
     persona_names = (prompt_builder.persona.name,)

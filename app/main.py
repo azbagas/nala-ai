@@ -1,7 +1,7 @@
 """Entrypoint.
 
     python -m app.main           # run the bot (long polling)
-    python -m app.main --check   # validate config + SQLite + Telegram + Gemini connectivity
+    python -m app.main --check   # validate config + SQLite + Telegram + LLM connectivity
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from telegram.ext import Application
 
 from app.config import ConfigError, Settings, load_settings
 from app.engine.conversation import ConversationEngine
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.engine.prompt_builder import PromptBuilder
 from app.gateway.debouncer import MessageDebouncer
 from app.gateway.handlers import create_on_flush_callback, register_handlers
@@ -122,15 +122,15 @@ async def run_checks(settings: Settings) -> bool:
         ok = False
         print(f"Telegram FAIL {exc!r}")
 
-    # 4. Test Gemini API
-    gemini = GeminiClient(settings.secrets.gemini_api_key, cfg.llm)
+    # 4. Test LLM API
+    llm = LLMClient(settings.secrets.llm_api_key, cfg.llm)
     for label, model in (("chat", cfg.llm.chat_model), ("utility", cfg.llm.utility_model)):
         try:
-            r = await gemini.generate("Balas dengan satu kata: halo", model=model, purpose="check")
-            print(f"Gemini OK   {label}={model} {r.latency_ms}ms reply={r.text[:40]!r}")
-        except GeminiError as exc:
+            r = await llm.generate("Balas dengan satu kata: halo", model=model, purpose="check")
+            print(f"LLM OK      {label}={model} {r.latency_ms}ms reply={r.text[:40]!r}")
+        except LLMError as exc:
             ok = False
-            print(f"Gemini FAIL {label}={model} {exc}")
+            print(f"LLM FAIL    {label}={model} {exc}")
 
     # 5. Test Proactive Planner
     try:
@@ -143,7 +143,7 @@ async def run_checks(settings: Settings) -> bool:
 
     # 6. Test Life Simulator
     try:
-        life_sim = LifeSimulator(gemini, store, settings.persona, settings.prompts_dir, cfg.llm, settings.tz)
+        life_sim = LifeSimulator(llm, store, settings.persona, settings.prompts_dir, cfg.llm, settings.tz)
         today_life = await life_sim.get_or_generate_today()
         print(f"Life OK     mood={today_life.mood!r} blocks={len(today_life.schedule)}")
     except Exception as exc:
@@ -168,7 +168,7 @@ async def execute_proactive_job(app: Application, plan_id: int) -> None:
     """Triggered by APScheduler when a proactive time arrives."""
     settings: Settings = app.bot_data["settings"]
     store: MemoryStore = app.bot_data["store"]
-    gemini: GeminiClient = app.bot_data["gemini"]
+    llm: LLMClient = app.bot_data["llm"]
     prompt_builder: PromptBuilder = app.bot_data["prompt_builder"]
 
     log.info("executing_scheduled_proactive_job plan_id=%d", plan_id)
@@ -177,7 +177,7 @@ async def execute_proactive_job(app: Application, plan_id: int) -> None:
             plan_id=plan_id,
             bot=app.bot,
             store=store,
-            gemini=gemini,
+            llm=llm,
             prompt_builder=prompt_builder,
             proactive_cfg=settings.config.proactive,
             conv_cfg=settings.config.conversation,
@@ -281,10 +281,10 @@ def run_bot(settings: Settings) -> None:
     )
 
     store = MemoryStore(settings.db_path)
-    gemini = GeminiClient(settings.secrets.gemini_api_key, settings.config.llm, store=store)
+    llm = LLMClient(settings.secrets.llm_api_key, settings.config.llm, store=store)
     prompt_builder = PromptBuilder(settings.prompts_dir, settings.persona, settings.tz)
     engine = ConversationEngine(
-        gemini=gemini,
+        llm=llm,
         prompt_builder=prompt_builder,
         llm_cfg=settings.config.llm,
         conv_cfg=settings.config.conversation,
@@ -293,14 +293,14 @@ def run_bot(settings: Settings) -> None:
     )
 
     extractor = MemoryExtractor(
-        gemini=gemini,
+        llm=llm,
         store=store,
         prompts_dir=settings.prompts_dir,
         llm_cfg=settings.config.llm,
         tz=settings.tz,
     )
     summarizer = ConversationSummarizer(
-        gemini=gemini,
+        llm=llm,
         store=store,
         prompts_dir=settings.prompts_dir,
         persona=settings.persona,
@@ -308,7 +308,7 @@ def run_bot(settings: Settings) -> None:
         tz=settings.tz,
     )
     life_simulator = LifeSimulator(
-        gemini=gemini,
+        llm=llm,
         store=store,
         persona=settings.persona,
         prompts_dir=settings.prompts_dir,
@@ -380,7 +380,7 @@ def run_bot(settings: Settings) -> None:
 
     app.bot_data["settings"] = settings
     app.bot_data["store"] = store
-    app.bot_data["gemini"] = gemini
+    app.bot_data["llm"] = llm
     app.bot_data["prompt_builder"] = prompt_builder
     app.bot_data["engine"] = engine
     app.bot_data["extractor"] = extractor

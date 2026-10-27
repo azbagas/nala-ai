@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import LLMSection, Persona
-from app.engine.gemini_client import GeminiResult
+from app.engine.llm_client import LLMResult
 from app.memory.store import MemoryStore
 from app.memory.summarizer import ConversationSummarizer
 
@@ -24,8 +24,8 @@ async def test_summarize_day(tmp_path):
     await store.save_message("user", "Hari ini aku lelah banget setelah kerja seharian.")
     await store.save_message("bot", "Istirahat dulu ya! Jangan lupa minum air.")
 
-    mock_gemini = AsyncMock()
-    mock_gemini.generate.return_value = GeminiResult(
+    mock_llm = AsyncMock()
+    mock_llm.generate.return_value = LLMResult(
         text="User merasa lelah setelah bekerja seharian. Nala mengingatkan untuk istirahat dan minum air.",
         model="gemini-test",
         input_tokens=100,
@@ -34,7 +34,7 @@ async def test_summarize_day(tmp_path):
     )
 
     summarizer = ConversationSummarizer(
-        gemini=mock_gemini,
+        llm=mock_llm,
         store=store,
         prompts_dir=PROMPTS_DIR,
         persona=Persona(name="Nala"),
@@ -67,8 +67,8 @@ async def test_check_and_create_rolling_summary(tmp_path):
             content=f"Ringkasan hari ke-{i+1}",
         )
 
-    mock_gemini = AsyncMock()
-    mock_gemini.generate.return_value = GeminiResult(
+    mock_llm = AsyncMock()
+    mock_llm.generate.return_value = LLMResult(
         text="Ringkasan bergulir komprehensif selama 3 hari terakhir.",
         model="gemini-test",
         input_tokens=150,
@@ -77,7 +77,7 @@ async def test_check_and_create_rolling_summary(tmp_path):
     )
 
     summarizer = ConversationSummarizer(
-        gemini=mock_gemini,
+        llm=mock_llm,
         store=store,
         prompts_dir=PROMPTS_DIR,
         persona=Persona(name="Nala"),

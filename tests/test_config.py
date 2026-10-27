@@ -55,11 +55,49 @@ def test_invalid_hhmm_rejected(tmp_path, monkeypatch):
 
 def test_missing_secrets(monkeypatch):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    monkeypatch.setenv("LLM_API_KEY", "x")
     with pytest.raises(ConfigError, match="TELEGRAM_BOT_TOKEN"):
         cfgmod.load_secrets()
 
 
+def test_missing_llm_api_key(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "x")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    with pytest.raises(ConfigError, match="LLM_API_KEY"):
+        cfgmod.load_secrets()
+
+
+def test_llm_api_key_loaded(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("LLM_API_KEY", "universal_key")
+    s = cfgmod.load_secrets()
+    assert s.llm_api_key == "universal_key"
+
+
 def test_secrets_repr_masked():
-    s = cfgmod.Secrets(telegram_bot_token="tok123", gemini_api_key="key456")
+    s = cfgmod.Secrets(telegram_bot_token="tok123", llm_api_key="key456")
     assert "tok123" not in repr(s) and "key456" not in repr(s)
+
+
+def test_reasoning_effort_validation():
+    cfg = cfgmod.LLMSection(
+        chat_model="foo",
+        utility_model="bar",
+        reasoning_effort="none",
+    )
+    assert cfg.reasoning_effort == "none"
+
+    cfg_empty = cfgmod.LLMSection(
+        chat_model="foo",
+        utility_model="bar",
+        reasoning_effort="  ",
+    )
+    assert cfg_empty.reasoning_effort is None
+
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        cfgmod.LLMSection(
+            chat_model="foo",
+            utility_model="bar",
+            reasoning_effort="invalid_mode",
+        )
+

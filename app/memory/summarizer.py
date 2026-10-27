@@ -12,7 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.config import LLMSection, Persona
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.memory.store import MemoryStore, MessageRecord, SummaryRecord
 from app.utils.time import now_local, now_utc, to_utc_iso
 
@@ -24,14 +24,14 @@ class ConversationSummarizer:
 
     def __init__(
         self,
-        gemini: GeminiClient,
+        llm: LLMClient,
         store: MemoryStore,
         prompts_dir: Path,
         persona: Persona,
         llm_cfg: LLMSection,
         tz: ZoneInfo,
     ) -> None:
-        self.gemini = gemini
+        self.llm = llm
         self.store = store
         self.prompts_dir = prompts_dir
         self.persona = persona
@@ -75,14 +75,14 @@ class ConversationSummarizer:
         prompt = prompt.replace("{{messages}}", self._format_messages(recent_messages))
 
         try:
-            result = await self.gemini.generate(
+            result = await self.llm.generate(
                 contents=prompt,
                 model=self.llm_cfg.utility_model,
                 temperature=self.llm_cfg.temperature_utility,
                 purpose="summarize_daily",
             )
             summary_text = result.text.strip()
-        except GeminiError as exc:
+        except LLMError as exc:
             log.error("daily_summary_failed error=%r", exc)
             return None
 
@@ -115,14 +115,14 @@ class ConversationSummarizer:
         )
 
         try:
-            result = await self.gemini.generate(
+            result = await self.llm.generate(
                 contents=prompt,
                 model=self.llm_cfg.utility_model,
                 temperature=self.llm_cfg.temperature_utility,
                 purpose="summarize_rolling",
             )
             rolling_text = result.text.strip()
-        except GeminiError as exc:
+        except LLMError as exc:
             log.error("rolling_summary_failed error=%r", exc)
             return None
 

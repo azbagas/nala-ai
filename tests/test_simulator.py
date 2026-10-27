@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import LLMSection, Persona
-from app.engine.gemini_client import GeminiClient, GeminiError, GeminiResult
+from app.engine.llm_client import LLMClient, LLMError, LLMResult
 from app.engine.prompt_builder import PromptBuilder
 from app.life.simulator import (
     LifeSimulator,
@@ -40,8 +40,8 @@ def persona():
 
 
 @pytest.fixture
-def mock_gemini():
-    gemini = MagicMock(spec=GeminiClient)
+def mock_llm():
+    llm = MagicMock(spec=LLMClient)
     sample_json = """
     {
       "mood": "senang dan berenergi",
@@ -58,8 +58,8 @@ def mock_gemini():
       ]
     }
     """
-    gemini.generate = AsyncMock(
-        return_value=GeminiResult(
+    llm.generate = AsyncMock(
+        return_value=LLMResult(
             text=sample_json,
             model="gemini-test",
             input_tokens=200,
@@ -67,7 +67,7 @@ def mock_gemini():
             latency_ms=300,
         )
     )
-    return gemini
+    return llm
 
 
 @pytest.fixture
@@ -141,10 +141,10 @@ def test_get_fallback_daily_life(persona):
 
 @pytest.mark.asyncio
 async def test_life_simulator_generate_and_idempotency(
-    temp_store: MemoryStore, mock_gemini, persona, prompt_dir
+    temp_store: MemoryStore, mock_llm, persona, prompt_dir
 ):
     sim = LifeSimulator(
-        gemini=mock_gemini,
+        llm=mock_llm,
         store=temp_store,
         persona=persona,
         prompts_dir=prompt_dir,
@@ -160,32 +160,32 @@ async def test_life_simulator_generate_and_idempotency(
     assert rec1.mood == "senang dan berenergi"
     assert rec1.energy == "high"
     assert len(rec1.schedule) == 7
-    mock_gemini.generate.assert_called_once()
+    mock_llm.generate.assert_called_once()
 
     # Verify persisted in database
     db_rec = await temp_store.get_daily_life("2026-10-07")
     assert db_rec is not None
     assert db_rec.mood == "senang dan berenergi"
 
-    # 2. Second call without force -> reuses record, does not call Gemini
+    # 2. Second call without force -> reuses record, does not call LLM
     rec2 = await sim.generate_daily_life(target_date=t_date, force=False)
     assert rec2.mood == rec1.mood
-    assert mock_gemini.generate.call_count == 1
+    assert mock_llm.generate.call_count == 1
 
     # 3. Third call with force=True -> re-rolls
     rec3 = await sim.generate_daily_life(target_date=t_date, force=True)
-    assert mock_gemini.generate.call_count == 2
+    assert mock_llm.generate.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_life_simulator_fallback_on_gemini_error(
+async def test_life_simulator_fallback_on_llm_error(
     temp_store: MemoryStore, persona, prompt_dir
 ):
-    failing_gemini = MagicMock(spec=GeminiClient)
-    failing_gemini.generate = AsyncMock(side_effect=GeminiError("API rate limit"))
+    failing_llm = MagicMock(spec=LLMClient)
+    failing_llm.generate = AsyncMock(side_effect=LLMError("API rate limit"))
 
     sim = LifeSimulator(
-        gemini=failing_gemini,
+        llm=failing_llm,
         store=temp_store,
         persona=persona,
         prompts_dir=prompt_dir,
@@ -238,7 +238,7 @@ def test_simulator_render_prompt_includes_life_and_dislikes(persona, prompt_dir)
         "friends": ["Dinda"],
     }
     sim = LifeSimulator(
-        gemini=MagicMock(),
+        llm=MagicMock(),
         store=MagicMock(),
         persona=persona,
         prompts_dir=prompt_dir,

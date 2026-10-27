@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import ConfigError, Settings
 from app.engine.conversation import ConversationEngine, FALLBACK_REPLY
-from app.engine.gemini_client import GeminiClient, GeminiError
+from app.engine.llm_client import LLMClient, LLMError
 from app.engine.prompt_builder import PromptBuilder
 from app.gateway.debouncer import MessageDebouncer
 from app.gateway.sender import send_bubbles
@@ -39,8 +39,8 @@ def _settings(ctx: ContextTypes.DEFAULT_TYPE) -> Settings:
     return ctx.application.bot_data["settings"]
 
 
-def _gemini(ctx: ContextTypes.DEFAULT_TYPE) -> GeminiClient:
-    return ctx.application.bot_data["gemini"]
+def _llm(ctx: ContextTypes.DEFAULT_TYPE) -> LLMClient:
+    return ctx.application.bot_data["llm"]
 
 
 def _engine(ctx: ContextTypes.DEFAULT_TYPE) -> ConversationEngine:
@@ -122,15 +122,15 @@ async def ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_chat.send_action("typing")
     now = format_local_id(now_local(settings.tz))
     try:
-        result = await _gemini(ctx).generate(
+        result = await _llm(ctx).generate(
             f"Sekarang {now} WIB. Balas dengan satu kalimat sapaan santai dalam Bahasa Indonesia.",
             model=settings.config.llm.utility_model,
             temperature=settings.config.llm.temperature_chat,
             purpose="ping",
         )
-    except GeminiError as exc:
+    except LLMError as exc:
         log.error("ping_failed error=%r", exc)
-        await update.effective_message.reply_text("Gemini lagi gak bisa dihubungi 😅 cek log ya.")
+        await update.effective_message.reply_text("Model AI lagi gak bisa dihubungi 😅 cek log ya.")
         return
 
     await update.effective_message.reply_text(
@@ -506,7 +506,7 @@ async def test_proactive_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         plan_id=plan_id,
         bot=ctx.bot,
         store=store,
-        gemini=_gemini(ctx),
+        llm=_llm(ctx),
         prompt_builder=_prompt_builder(ctx),
         proactive_cfg=settings.config.proactive,
         conv_cfg=settings.config.conversation,

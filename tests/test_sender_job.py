@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import ConversationSection, LLMSection, Persona, ProactiveSection, TimeRange, Window
-from app.engine.gemini_client import GeminiClient, GeminiResult
+from app.engine.llm_client import LLMClient, LLMResult
 from app.engine.prompt_builder import PromptBuilder
 from app.memory.store import MemoryStore, ThreadRecord
 from app.proactive.sender_job import (
@@ -30,10 +30,10 @@ async def temp_store(tmp_path):
 
 
 @pytest.fixture
-def mock_gemini():
-    gemini = MagicMock(spec=GeminiClient)
-    gemini.generate = AsyncMock(
-        return_value=GeminiResult(
+def mock_llm():
+    llm = MagicMock(spec=LLMClient)
+    llm.generate = AsyncMock(
+        return_value=LLMResult(
             text="Lagi santai nih, kamu lagi apa sekarang?",
             model="gemini-test",
             input_tokens=150,
@@ -41,7 +41,7 @@ def mock_gemini():
             latency_ms=250,
         )
     )
-    return gemini
+    return llm
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ def test_find_due_thread():
 
 
 @pytest.mark.asyncio
-async def test_send_proactive_success(temp_store, mock_gemini, prompt_builder, proactive_cfg):
+async def test_send_proactive_success(temp_store, mock_llm, prompt_builder, proactive_cfg):
     # Setup plan
     p_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
     await temp_store.set_owner_chat_id(99999)
@@ -129,7 +129,7 @@ async def test_send_proactive_success(temp_store, mock_gemini, prompt_builder, p
         plan_id=p_id,
         bot=bot,
         store=temp_store,
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=prompt_builder,
         proactive_cfg=proactive_cfg,
         conv_cfg=conv_cfg,
@@ -159,7 +159,7 @@ async def test_send_proactive_success(temp_store, mock_gemini, prompt_builder, p
 
 
 @pytest.mark.asyncio
-async def test_send_proactive_idempotent(temp_store, mock_gemini, prompt_builder, proactive_cfg):
+async def test_send_proactive_idempotent(temp_store, mock_llm, prompt_builder, proactive_cfg):
     p_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
     # Mark already sent
     msg_id = await temp_store.save_message("bot", "Pagi!", origin="proactive")
@@ -170,7 +170,7 @@ async def test_send_proactive_idempotent(temp_store, mock_gemini, prompt_builder
         plan_id=p_id,
         bot=bot,
         store=temp_store,
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=prompt_builder,
         proactive_cfg=proactive_cfg,
         conv_cfg=ConversationSection(),
@@ -179,11 +179,11 @@ async def test_send_proactive_idempotent(temp_store, mock_gemini, prompt_builder
     )
 
     assert success is False
-    mock_gemini.generate.assert_not_called()
+    mock_llm.generate.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_send_proactive_skipped_presend(temp_store, mock_gemini, prompt_builder, proactive_cfg):
+async def test_send_proactive_skipped_presend(temp_store, mock_llm, prompt_builder, proactive_cfg):
     p_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
     await temp_store.set_owner_chat_id(99999)
 
@@ -195,7 +195,7 @@ async def test_send_proactive_skipped_presend(temp_store, mock_gemini, prompt_bu
         plan_id=p_id,
         bot=bot,
         store=temp_store,
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=prompt_builder,
         proactive_cfg=proactive_cfg,
         conv_cfg=ConversationSection(),
@@ -208,7 +208,7 @@ async def test_send_proactive_skipped_presend(temp_store, mock_gemini, prompt_bu
     plan = await temp_store.get_plan_by_id(p_id)
     assert plan.status == "skipped"
     assert plan.skip_reason == "quiet_hours"
-    mock_gemini.generate.assert_not_called()
+    mock_llm.generate.assert_not_called()
 
 
 def test_compute_text_similarity():
@@ -246,21 +246,21 @@ async def test_send_proactive_repetition_retry(temp_store, prompt_builder, proac
 
     p_id = await temp_store.create_plan("2026-10-07", "morning", "2026-10-07T07:15:00Z")
 
-    # Mock gemini to return a duplicate on 1st call, and unique text on 2nd call
+    # Mock LLM to return a duplicate on 1st call, and unique text on 2nd call
     call_count = 0
 
     async def mock_generate(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return GeminiResult(
+            return LLMResult(
                 text="Pagi! Udah sarapan belum?",
                 model="gemini-test",
                 input_tokens=100,
                 output_tokens=20,
                 latency_ms=200,
             )
-        return GeminiResult(
+        return LLMResult(
             text="Lagi santai nih, cuaca hari ini cerah banget ya!",
             model="gemini-test",
             input_tokens=120,
@@ -268,8 +268,8 @@ async def test_send_proactive_repetition_retry(temp_store, prompt_builder, proac
             latency_ms=220,
         )
 
-    mock_gemini = MagicMock(spec=GeminiClient)
-    mock_gemini.generate = AsyncMock(side_effect=mock_generate)
+    mock_llm = MagicMock(spec=LLMClient)
+    mock_llm.generate = AsyncMock(side_effect=mock_generate)
 
     bot = MagicMock()
     bot.send_message = AsyncMock()
@@ -280,7 +280,7 @@ async def test_send_proactive_repetition_retry(temp_store, prompt_builder, proac
         plan_id=p_id,
         bot=bot,
         store=temp_store,
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=prompt_builder,
         proactive_cfg=proactive_cfg,
         conv_cfg=ConversationSection(),
@@ -291,7 +291,7 @@ async def test_send_proactive_repetition_retry(temp_store, prompt_builder, proac
     )
 
     assert success is True
-    # Gemini should have been called twice (1st duplicate -> retry -> 2nd accepted)
+    # LLM should have been called twice (1st duplicate -> retry -> 2nd accepted)
     assert call_count == 2
     # Verify sent message is the fresh text
     sent_text = bot.send_message.call_args_list[0].kwargs.get("text") or bot.send_message.call_args_list[0].args[1]

@@ -13,7 +13,7 @@ from app.engine.conversation import (
     contains_assistant_voice,
     sanitize_text,
 )
-from app.engine.gemini_client import GeminiError, GeminiResult
+from app.engine.llm_client import LLMError, LLMResult
 from app.engine.prompt_builder import PromptBuilder
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,20 +55,20 @@ def test_engine():
         typing_delay=TypingDelay(min_seconds=0.1, max_seconds=1.0, chars_per_second=25.0),
     )
 
-    mock_gemini = AsyncMock()
+    mock_llm = AsyncMock()
     engine = ConversationEngine(
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=builder,
         llm_cfg=llm_cfg,
         conv_cfg=conv_cfg,
     )
-    return engine, mock_gemini
+    return engine, mock_llm
 
 
 @pytest.mark.asyncio
 async def test_conversation_engine_reply_success(test_engine):
-    engine, mock_gemini = test_engine
-    mock_gemini.generate.return_value = GeminiResult(
+    engine, mock_llm = test_engine
+    mock_llm.generate.return_value = LLMResult(
         text="Haii! Lagi santai nih di kamar.\n---\nKamu sendiri lagi apa?",
         model="gemini-test",
         input_tokens=100,
@@ -90,17 +90,17 @@ async def test_conversation_engine_reply_success(test_engine):
 
 @pytest.mark.asyncio
 async def test_conversation_engine_quality_retry(test_engine):
-    engine, mock_gemini = test_engine
+    engine, mock_llm = test_engine
     # First call returns assistant voice, second call returns natural persona
-    mock_gemini.generate.side_effect = [
-        GeminiResult(
+    mock_llm.generate.side_effect = [
+        LLMResult(
             text="Halo! Sebagai asisten AI, ada yang bisa saya bantu?",
             model="gemini-test",
             input_tokens=100,
             output_tokens=30,
             latency_ms=200,
         ),
-        GeminiResult(
+        LLMResult(
             text="Ehh halo! Lagi santai aja nih hehe.",
             model="gemini-test",
             input_tokens=150,
@@ -110,14 +110,14 @@ async def test_conversation_engine_quality_retry(test_engine):
     ]
 
     bubbles = await engine.reply("Hai Nala")
-    assert mock_gemini.generate.call_count == 2
+    assert mock_llm.generate.call_count == 2
     assert "santai" in bubbles[0]
 
 
 @pytest.mark.asyncio
 async def test_conversation_engine_fallback_on_error(test_engine):
-    engine, mock_gemini = test_engine
-    mock_gemini.generate.side_effect = GeminiError("API timeout")
+    engine, mock_llm = test_engine
+    mock_llm.generate.side_effect = LLMError("API timeout")
 
     bubbles = await engine.reply("Halo")
     assert bubbles == [FALLBACK_REPLY]
@@ -125,8 +125,8 @@ async def test_conversation_engine_fallback_on_error(test_engine):
 
 @pytest.mark.asyncio
 async def test_conversation_engine_clear_history(test_engine):
-    engine, mock_gemini = test_engine
-    mock_gemini.generate.return_value = GeminiResult(
+    engine, mock_llm = test_engine
+    mock_llm.generate.return_value = LLMResult(
         text="Balasan",
         model="gemini-test",
         input_tokens=10,
@@ -151,17 +151,17 @@ async def test_conversation_engine_with_memory_store(tmp_path):
 
     persona = Persona(name="Nala")
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
-    mock_gemini = AsyncMock()
-    mock_gemini.generate.return_value = GeminiResult(
+    mock_llm = AsyncMock()
+    mock_llm.generate.return_value = LLMResult(
         text="Halo! Aku dengar kamu kerja di Bandung ya?",
-        model="gemini-test",
+        model="test",
         input_tokens=100,
         output_tokens=25,
         latency_ms=150,
     )
 
     engine = ConversationEngine(
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=builder,
         llm_cfg=LLMSection(chat_model="test", utility_model="test-lite", history_window_messages=5),
         conv_cfg=ConversationSection(),
@@ -178,8 +178,8 @@ async def test_conversation_engine_with_memory_store(tmp_path):
     assert db_messages[0].content == "Halo!"
     assert db_messages[1].role == "bot"
 
-    # Verify that the system prompt passed to Gemini included the fact
-    call_args = mock_gemini.generate.call_args
+    # Verify that the system prompt passed to LLM included the fact
+    call_args = mock_llm.generate.call_args
     assert "Software Engineer di Bandung" in call_args.kwargs["system_instruction"]
 
     # Verify last_user_message_time updated and ignored_count reset
@@ -210,17 +210,17 @@ async def test_conversation_learns_user_name(tmp_path):
 
     persona = Persona(name="Nala")
     builder = PromptBuilder(PROMPTS_DIR, persona, WIB)
-    mock_gemini = AsyncMock()
-    mock_gemini.generate.return_value = GeminiResult(
+    mock_llm = AsyncMock()
+    mock_llm.generate.return_value = LLMResult(
         text="haii Bagas! salam kenal yaa",
-        model="gemini-test",
+        model="test",
         input_tokens=50,
         output_tokens=15,
         latency_ms=100,
     )
 
     engine = ConversationEngine(
-        gemini=mock_gemini,
+        llm=mock_llm,
         prompt_builder=builder,
         llm_cfg=LLMSection(chat_model="test", utility_model="test-lite", history_window_messages=5),
         conv_cfg=ConversationSection(),
@@ -231,7 +231,7 @@ async def test_conversation_learns_user_name(tmp_path):
     await engine.reply("halo nala, namaku Bagas salam kenal!")
 
     assert await store.get_user_name() == "Bagas"
-    call_args = mock_gemini.generate.call_args
+    call_args = mock_llm.generate.call_args
     assert "Bagas" in call_args.kwargs["system_instruction"]
     assert "Kamu sudah tahu nama user" in call_args.kwargs["system_instruction"]
 

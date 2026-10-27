@@ -62,7 +62,7 @@ def mock_settings():
     return Settings(
         config=cfg,
         persona=persona,
-        secrets=Secrets(telegram_bot_token="dummy", gemini_api_key="dummy"),
+        secrets=Secrets(telegram_bot_token="dummy", llm_api_key="dummy"),
         config_dir=Path("."),
         prompts_dir=Path("."),
         data_dir=Path("."),
