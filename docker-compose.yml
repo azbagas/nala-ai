@@ -3,6 +3,8 @@ services:
     build: .
     container_name: companion-bot
     restart: unless-stopped        # auto-restart on crash
+    mem_limit: 256m
+    cpus: 0.5
     env_file: .env
     environment:
       TZ: Asia/Jakarta
